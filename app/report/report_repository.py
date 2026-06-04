@@ -93,7 +93,12 @@ def fetch_details(lo, hi, employee_id):
     ).where(Segment.state == _ACTIVE, Segment.start_ts >= lo, Segment.start_ts <= hi)
     if employee_id:
         stmt = stmt.where(Segment.employee_id == employee_id)
-    stmt = stmt.group_by(Segment.app, title).order_by(total.desc()).limit(40)
+    # project est selectionne -> il doit etre dans le GROUP BY (strict sous Postgres).
+    stmt = (
+        stmt.group_by(Segment.app, title, Segment.project)
+        .order_by(total.desc())
+        .limit(40)
+    )
     return _rows(stmt)
 
 
