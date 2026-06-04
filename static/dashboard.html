@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LCSify - Tableau de bord</title>
+<link rel="icon" type="image/png" href="/static/logo.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2129; --line: #2a3441;
+    --txt: #e6edf3; --muted: #8b98a5; --accent: #4ea1ff;
+    --good: #3fb950; --warn: #d29922; --bad: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+         background: var(--bg); color: var(--txt); }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--line);
+           display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  h1 { font-size: 18px; margin:0; font-weight:600; }
+  .controls { margin-left:auto; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  input, select, button {
+    background: var(--panel); color: var(--txt); border:1px solid var(--line);
+    border-radius:8px; padding:8px 10px; font-size:13px; }
+  button { cursor:pointer; }
+  button.primary { background: var(--accent); color:#06121f; border-color:var(--accent); font-weight:600; }
+  main { padding: 24px; max-width: 1200px; margin:0 auto; }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
+  .panel { background: var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .panel h2 { font-size:14px; margin:0 0 14px; color:var(--muted); font-weight:600;
+              text-transform:uppercase; letter-spacing:.04em; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; }
+  tr.clickable:hover { background: rgba(78,161,255,.08); cursor:pointer; }
+  .bar { height:8px; border-radius:4px; background:var(--line); overflow:hidden; min-width:90px; }
+  .bar > span { display:block; height:100%; background:var(--good); }
+  .rate { font-variant-numeric: tabular-nums; font-weight:600; }
+  .pill { font-size:11px; padding:2px 8px; border-radius:99px; }
+  .pill.on { background:rgba(63,185,80,.15); color:var(--good); }
+  .pill.off { background:rgba(139,152,165,.15); color:var(--muted); }
+  .muted { color:var(--muted); font-size:12px; }
+  #login { max-width:340px; margin:80px auto; text-align:center; }
+  #login input { width:100%; margin:12px 0; }
+  .full { grid-column: 1 / -1; }
+  canvas { max-height: 260px; }
+  .empty { color:var(--muted); padding:20px; text-align:center; }
+  @media(max-width:780px){ .grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<div id="login" class="panel">
+  <img src="/static/logo.png" alt="LCSify" style="height:64px;width:auto;margin-bottom:8px">
+  <h1>LCSify</h1>
+  <p class="muted">Entre le mot de passe d'acces.</p>
+  <input type="password" id="pw" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')doLogin()">
+  <button class="primary" style="width:100%" onclick="doLogin()">Se connecter</button>
+  <p id="loginErr" style="color:var(--bad);font-size:13px;"></p>
+</div>
+
+<div id="appwrap" style="display:none">
+<header>
+  <img src="/static/logo.png" alt="LCSify" style="height:32px;width:auto">
+  <h1>LCSify — Suivi des monteurs</h1>
+  <div class="controls">
+    <label class="muted">Du</label>
+    <input type="date" id="from">
+    <label class="muted">au</label>
+    <input type="date" id="to">
+    <button class="primary" onclick="refresh()">Actualiser</button>
+    <label class="muted" style="display:flex;align-items:center;gap:5px">
+      <input type="checkbox" id="autoChk" checked style="width:auto"> Auto
+    </label>
+    <span id="liveDot" class="muted" style="font-size:12px"></span>
+  </div>
+</header>
+
+<main>
+  <div class="grid">
+    <div class="panel full">
+      <h2>Activite par monteur <span class="muted" style="font-weight:400;text-transform:none">(clique un monteur pour le detail)</span></h2>
+      <table id="empTable">
+        <thead><tr>
+          <th>Monteur</th><th>Temps actif</th><th>Inactif</th><th>Pause</th>
+          <th>Taux d'activite</th><th>Statut</th>
+          <th>En ce moment</th><th>Derniere activite</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>Temps par projet <span id="projScope" class="muted"></span></h2>
+      <canvas id="projChart"></canvas>
+    </div>
+
+    <div class="panel">
+      <h2>Temps par application <span id="appScope" class="muted"></span></h2>
+      <canvas id="appChart"></canvas>
+    </div>
+
+    <!-- Detail : sur quoi exactement (titre de fenetre) le temps a ete passe -->
+    <div class="panel full">
+      <h2>Detail des fenetres <span id="detScope" class="muted"></span></h2>
+      <table id="detTable">
+        <thead><tr>
+          <th>Application</th><th>Fenetre / onglet</th><th>Projet</th><th>Temps actif</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- Reglages appliques a tous les agents (config centrale, mise a jour a chaud) -->
+    <div class="panel full">
+      <h2>Parametres des agents
+        <span class="muted" style="font-weight:400;text-transform:none">(appliques a tous les postes, ~1 min)</span>
+      </h2>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">
+        <label class="muted">Intervalle de mesure (s)<br>
+          <input type="number" id="cfg_sample" min="1" max="3600" style="width:130px"></label>
+        <label class="muted">Seuil inactif (s)<br>
+          <input type="number" id="cfg_idle" min="5" max="86400" style="width:130px"></label>
+        <label class="muted">Intervalle synchro (s)<br>
+          <input type="number" id="cfg_sync" min="5" max="3600" style="width:130px"></label>
+        <label class="muted">Taille lot synchro<br>
+          <input type="number" id="cfg_batch" min="1" max="5000" style="width:130px"></label>
+        <button class="primary" onclick="saveAgentConfig()">Enregistrer</button>
+        <span id="cfgMsg" class="muted"></span>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<script>
+/* ===================================================================
+   COMMENT FONCTIONNE CETTE PAGE (resume)
+   -------------------------------------------------------------------
+   1. L'utilisateur tape le mot de passe -> doLogin().
+   2. On interroge le serveur (fonction api()) qui renvoie du JSON.
+   3. refresh()       remplit le tableau des monteurs + colonne "En ce moment".
+   4. loadBreakdown() remplit les 2 graphiques + le tableau de detail.
+   5. startAuto()     rafraichit automatiquement toutes les 20 s.
+   Toutes les requetes passent le mot de passe + la periode choisie (qs()).
+   =================================================================== */
+
+let PW = "";              // mot de passe saisi, renvoye a chaque requete
+let selectedEmp = null;   // monteur selectionne (null = toute l'equipe)
+let selectedName = null;  // nom du monteur selectionne
+let projChart, appChart;  // references aux 2 graphiques Chart.js
+let autoTimer = null;     // minuteur du rafraichissement automatique
+
+// Echappe le texte pour l'inserer sans risque dans du HTML.
+function esc(s){
+  return (s||"").replace(/[&<>"]/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+// Raccourcit un titre de fenetre trop long.
+function court(s, n=60){ s = s||""; return s.length>n ? s.slice(0,n)+"…" : s; }
+
+// Convertit des secondes en texte lisible : 3720 -> "1h02"
+function fmt(sec){
+  sec = Math.round(sec||0);
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60);
+  if(h>0) return h + "h" + String(m).padStart(2,'0');
+  return m + " min";
+}
+function fmtDate(iso){
+  if(!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+function rateColor(r){ return r>=70?'var(--good)': r>=40?'var(--warn)':'var(--bad)'; }
+function isRecent(iso){ return iso && (Date.now()-new Date(iso).getTime()) < 10*60*1000; }
+
+// Construit la query : uniquement la periode (le mot de passe passe par un header).
+function qs(){
+  const f = document.getElementById('from').value;
+  const t = document.getElementById('to').value;
+  if(f && t) return "date_from=" + f + "&date_to=" + t;
+  return "days=7";
+}
+
+// Appelle le serveur et renvoie le JSON. Le mot de passe va dans un en-tete
+// HTTP (X-Dashboard-Password), pas dans l'URL.
+async function api(path){
+  const sep = path.includes('?') ? '&' : '?';
+  const r = await fetch(path + sep + qs(), {
+    headers: { 'X-Dashboard-Password': PW }
+  });
+  if(r.status === 401) throw new Error("auth");   // mauvais mot de passe
+  if(!r.ok) throw new Error("err");
+  return r.json();
+}
+
+async function doLogin(){
+  PW = document.getElementById('pw').value;
+  try {
+    await api('/api/summary');
+    document.getElementById('login').style.display='none';
+    document.getElementById('appwrap').style.display='block';
+    const today = new Date().toISOString().slice(0,10);
+    const wk = new Date(Date.now()-6*864e5).toISOString().slice(0,10);
+    document.getElementById('from').value = wk;
+    document.getElementById('to').value = today;
+    refresh();
+    startAuto();   // demarre le rafraichissement automatique
+    loadAgentConfig();
+  } catch(e){
+    document.getElementById('loginErr').textContent = "Mot de passe incorrect.";
+  }
+}
+
+// --- Parametres des agents (config centrale) ---
+const CFG_FIELDS = ['sample_interval_sec','idle_threshold_sec',
+  'sync_interval_sec','sync_batch_size'];
+const CFG_INPUTS = {sample_interval_sec:'cfg_sample', idle_threshold_sec:'cfg_idle',
+  sync_interval_sec:'cfg_sync', sync_batch_size:'cfg_batch'};
+
+async function loadAgentConfig(){
+  try {
+    const r = await fetch('/api/admin/config', {headers:{'X-Dashboard-Password':PW}});
+    if(!r.ok) return;
+    const c = await r.json();
+    CFG_FIELDS.forEach(k => document.getElementById(CFG_INPUTS[k]).value = c[k]);
+  } catch(e){ /* silencieux */ }
+}
+
+async function saveAgentConfig(){
+  const body = {};
+  CFG_FIELDS.forEach(k => body[k] = parseInt(document.getElementById(CFG_INPUTS[k]).value, 10));
+  const msg = document.getElementById('cfgMsg');
+  msg.style.color = 'var(--muted)'; msg.textContent = 'Enregistrement...';
+  try {
+    const r = await fetch('/api/admin/config', {
+      method:'PUT',
+      headers:{'X-Dashboard-Password':PW, 'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    if(r.ok){
+      const c = await r.json();
+      CFG_FIELDS.forEach(k => document.getElementById(CFG_INPUTS[k]).value = c[k]);
+      msg.style.color = 'var(--good)';
+      msg.textContent = 'Enregistre — les agents se mettent a jour sous ~1 min.';
+    } else if(r.status === 422){
+      msg.style.color = 'var(--bad)';
+      msg.textContent = 'Valeurs hors limites : verifie les champs.';
+    } else {
+      msg.style.color = 'var(--bad)';
+      msg.textContent = 'Erreur a l\'enregistrement.';
+    }
+  } catch(e){
+    msg.style.color = 'var(--bad)';
+    msg.textContent = 'Serveur injoignable.';
+  }
+}
+
+// Rafraichissement automatique toutes les 20 s (case "Auto").
+function startAuto(){
+  if(autoTimer) clearInterval(autoTimer);
+  autoTimer = setInterval(() => {
+    if(document.getElementById('autoChk').checked) refresh();
+  }, 20000);
+}
+
+// Selectionne un monteur (ou toute l'equipe si id=null) et recharge le detail.
+function selectEmp(id, name){
+  selectedEmp = id; selectedName = name;
+  loadBreakdown(name);
+}
+
+// Remplit le tableau principal : une ligne par monteur.
+// Conserve la selection en cours (important pour l'auto-refresh).
+async function refresh(){
+  const data = await api('/api/summary');
+  const tb = document.querySelector('#empTable tbody');
+  tb.innerHTML = "";
+  if(!data.employees.length){
+    tb.innerHTML = '<tr><td colspan="8" class="empty">Aucune donnee sur cette periode.</td></tr>';
+  }
+  // Si le monteur selectionne n'existe plus sur la periode, on revient a l'equipe.
+  if(selectedEmp && !data.employees.some(e => e.employee_id === selectedEmp)){
+    selectedEmp = null; selectedName = null;
+  }
+  data.employees.forEach(e => {
+    const tr = document.createElement('tr');
+    tr.className = 'clickable';
+    if(e.employee_id === selectedEmp) tr.style.background = 'rgba(78,161,255,.12)';
+    tr.onclick = () => selectEmp(e.employee_id, e.employee_name);
+    // "En ce moment" : etat courant (en pause / inactif) ou app + titre.
+    let now = '<span class="muted">—</span>';
+    if(e.current_state === 'paused'){
+      now = '<div>en pause</div>';
+    } else if(e.current_state === 'idle'){
+      now = '<div>inactif</div>';
+    } else if(e.current_app){
+      now = `<div>${esc(e.current_app)}</div><div class="muted" style="font-size:11px">${esc(court(e.current_title,42))}</div>`;
+    }
+    tr.innerHTML = `
+      <td><strong>${esc(e.employee_name)}</strong></td>
+      <td>${fmt(e.active_sec)}</td>
+      <td class="muted">${fmt(e.idle_sec)}</td>
+      <td class="muted">${fmt(e.paused_sec)}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="bar"><span style="width:${e.activity_rate}%;background:${rateColor(e.activity_rate)}"></span></div>
+          <span class="rate" style="color:${rateColor(e.activity_rate)}">${e.activity_rate}%</span>
+        </div>
+      </td>
+      <td><span class="pill ${isRecent(e.last_seen)?'on':'off'}">${isRecent(e.last_seen)?'En ligne':'Hors ligne'}</span></td>
+      <td>${now}</td>
+      <td class="muted">${fmtDate(e.last_seen)}</td>`;
+    tb.appendChild(tr);
+  });
+  document.getElementById('liveDot').textContent =
+    "Mis a jour a " + new Date().toLocaleTimeString('fr-FR');
+  // Recharge graphiques + detail pour la selection courante.
+  loadBreakdown(selectedName);
+}
+
+// Remplit les 2 graphiques + le tableau de detail.
+// Si un monteur est selectionne, on filtre sur lui ; sinon toute l'equipe.
+async function loadBreakdown(name){
+  const scope = name ? "— " + name : "— toute l'equipe";
+  document.getElementById('projScope').textContent = scope;
+  document.getElementById('appScope').textContent = scope;
+  document.getElementById('detScope').textContent = scope;
+  const empParam = selectedEmp ? '&employee_id=' + encodeURIComponent(selectedEmp) : '';
+
+  const proj = await api('/api/projects?x=1' + empParam);
+  const agg = {};
+  proj.projects.forEach(p => { agg[p.project] = (agg[p.project]||0) + p.active_sec; });
+  drawBar('projChart', agg, '#4ea1ff', c => projChart = c, projChart);
+
+  const apps = await api('/api/apps?x=1' + empParam);
+  const aagg = {};
+  apps.apps.forEach(a => { aagg[a.app||'(inconnu)'] = a.active_sec; });
+  drawBar('appChart', aagg, '#a371f7', c => appChart = c, appChart);
+
+  // Tableau de detail : sur quoi exactement le temps a ete passe.
+  const det = await api('/api/details?x=1' + empParam);
+  const tb = document.querySelector('#detTable tbody');
+  tb.innerHTML = "";
+  if(!det.details.length){
+    tb.innerHTML = '<tr><td colspan="4" class="empty">Aucun detail sur cette periode.</td></tr>';
+  }
+  det.details.forEach(d => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${esc(d.app)}</td>
+      <td>${esc(court(d.window_title))}</td>
+      <td class="muted">${esc(d.project||'—')}</td>
+      <td>${fmt(d.active_sec)}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function drawBar(canvasId, dataObj, color, setRef, prev){
+  const entries = Object.entries(dataObj).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  if(prev) prev.destroy();
+  const ctx = document.getElementById(canvasId);
+  const chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: entries.map(e=>e[0]),
+      datasets: [{ data: entries.map(e=>Math.round(e[1]/60)), backgroundColor: color, borderRadius:6 }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: { legend:{display:false},
+        tooltip:{ callbacks:{ label: c => fmt(c.parsed.x*60) } } },
+      scales: {
+        x: { ticks:{ color:'#8b98a5', callback:v=>v+' min' }, grid:{color:'#2a3441'} },
+        y: { ticks:{ color:'#e6edf3' }, grid:{display:false} }
+      }
+    }
+  });
+  setRef(chart);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+# Secrets / configuration locale
+.env
+
+# Base de donnees locale
+*.db
+*.db-wal
+*.db-shm
+
+# Logs (courants + rotes)
+*.log
+*.log.*
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Outils
+.ruff_cache/
+
+# Editeurs / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
