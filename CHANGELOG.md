@@ -16,6 +16,7 @@
 - **CORS** pour le frontend Next.js
 - Propagation du nom du monteur sur tout son historique (changement de nom dans l'agent)
 - Déploiement Railway : `Procfile` (commande uvicorn) + pin Python 3.12
+- Temps réel : présence en mémoire + `POST /api/heartbeat` (agent) + flux SSE `GET /api/live` (dashboard)
 
 **Updated**
 - Normalisation des URLs Postgres (`postgres://` -> `postgresql://`) pour Railway/Heroku
