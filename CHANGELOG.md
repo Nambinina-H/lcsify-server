@@ -20,6 +20,7 @@
 
 **Updated**
 - Normalisation des URLs Postgres (`postgres://` -> `postgresql://`) pour Railway/Heroku
+- Temps réel événementiel : présence poussée *sur changement* + passage hors-ligne explicite et immédiat (`state="offline"`) ; SSE rafraîchi à 1 s
 
 **Fixed**
 - Compatibilité PostgreSQL de `/api/details` (ajout de `project` au `GROUP BY`)

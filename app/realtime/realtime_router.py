@@ -10,8 +10,14 @@ router = APIRouter()
 
 @router.post("/api/heartbeat")
 def heartbeat(payload: Heartbeat, _=Depends(check_agent_key)):
-    """L'agent y pousse son état courant (~10 s) -> présence temps réel."""
-    presence.update(payload.employee_id, payload.model_dump())
+    """L'agent y pousse son état courant (sur changement) -> présence temps réel.
+
+    `state="offline"` = fermeture/arrêt de l'agent : passage hors-ligne immédiat.
+    """
+    if payload.state == "offline":
+        presence.mark_offline(payload.employee_id)
+    else:
+        presence.update(payload.employee_id, payload.model_dump())
     return {"status": "ok"}
 
 
