@@ -11,6 +11,7 @@ from app.dashboard.dashboard_router import router as dashboard_router
 from app.env.settings import CORS_ORIGINS, STATIC_DIR
 from app.ingest.ingest_router import router as ingest_router
 from app.logging_config import get_logger, setup_logging
+from app.realtime.realtime_router import router as realtime_router
 from app.report.report_router import router as report_router
 
 
@@ -40,6 +41,7 @@ app.add_middleware(
 app.include_router(ingest_router)
 app.include_router(report_router)
 app.include_router(agent_config_router)
+app.include_router(realtime_router)
 app.include_router(dashboard_router)
 
 if os.path.isdir(STATIC_DIR):
