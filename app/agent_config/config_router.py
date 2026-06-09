@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.agent_config import config_service
 from app.agent_config.schemas import AgentConfig
-from app.security.security import check_agent_key, check_dashboard
+from app.security.security import check_agent_key, get_current_user, require_admin
 
 router = APIRouter()
 
@@ -14,12 +14,12 @@ def agent_config(_=Depends(check_agent_key)):
 
 
 @router.get("/api/admin/config")
-def admin_get_config(_=Depends(check_dashboard)):
-    """Lue par le dashboard (mot de passe) : la config courante a editer."""
+def admin_get_config(_=Depends(get_current_user)):
+    """Lue par le dashboard (manager connecte) : la config courante a editer."""
     return config_service.get_config()
 
 
 @router.put("/api/admin/config")
-def admin_put_config(payload: AgentConfig, _=Depends(check_dashboard)):
-    """Modifiee par le dashboard (mot de passe). Bornes validees par le schema."""
+def admin_put_config(payload: AgentConfig, _=Depends(require_admin)):
+    """Modifiee par un admin. Bornes validees par le schema."""
     return config_service.update_config(payload)

@@ -7,3 +7,10 @@ class StateEnum(str, Enum):
     ACTIVE = "active"
     IDLE = "idle"
     PAUSED = "paused"
+
+
+class RoleEnum(str, Enum):
+    """Roles des comptes manager du dashboard."""
+
+    ADMIN = "admin"      # acces complet (gestion projets, config)
+    MANAGER = "manager"  # lecture seule du dashboard

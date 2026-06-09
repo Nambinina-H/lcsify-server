@@ -6,19 +6,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.agent_config.config_router import router as agent_config_router
+from app.auth import auth_service
+from app.auth.auth_router import router as auth_router
 from app.common.error.handlers import register_exception_handlers
 from app.dashboard.dashboard_router import router as dashboard_router
+from app.database.migrate import run_migrations
 from app.env.settings import CORS_ORIGINS, STATIC_DIR
 from app.ingest.ingest_router import router as ingest_router
 from app.logging_config import get_logger, setup_logging
+from app.projects.project_router import router as projects_router
 from app.realtime.realtime_router import router as realtime_router
 from app.report.report_router import router as report_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Demarrage : on configure les logs puis on applique les migrations.
+    # Demarrage : logs -> migrations (cree le schema) -> compte admin initial.
     setup_logging()
+    run_migrations()
+    auth_service.ensure_admin()
     logger.info("Serveur demarre.")
     yield
     logger.info("Serveur arrete.")
@@ -38,9 +44,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(ingest_router)
 app.include_router(report_router)
 app.include_router(agent_config_router)
+app.include_router(projects_router)
 app.include_router(realtime_router)
 app.include_router(dashboard_router)
 

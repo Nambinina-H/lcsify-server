@@ -7,6 +7,10 @@ alembic==1.18.4
 # Driver PostgreSQL (optionnel : seulement si on utilise Postgres)
 psycopg2-binary==2.9.12
 
+# Authentification des managers (JWT + hachage des mots de passe)
+PyJWT==2.10.1
+bcrypt==4.3.0
+
 # Outils de developpement (qualite)
 ruff==0.15.15
 pre-commit==4.2.0

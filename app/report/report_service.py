@@ -1,14 +1,21 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.report import report_repository
 
 
 def _range(days, date_from, date_to):
+    """Bornes en datetime UTC naif (coherent avec le stockage des segments)."""
     if date_from and date_to:
-        return date_from, date_to + "T23:59:59"
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=days)
-    return start.isoformat(), end.isoformat()
+        lo = datetime.fromisoformat(date_from)
+        hi = datetime.fromisoformat(date_to + "T23:59:59")
+        return lo, hi
+    end = datetime.now(timezone.utc).replace(tzinfo=None)
+    return end - timedelta(days=days), end
+
+
+def _iso(dt):
+    """datetime UTC naif -> ISO avec offset (le front l'interprete en UTC)."""
+    return dt.replace(tzinfo=timezone.utc).isoformat() if dt else None
 
 
 def summary(days, date_from, date_to):
@@ -31,13 +38,13 @@ def summary(days, date_from, date_to):
             "idle_sec": idle,
             "paused_sec": paused,
             "activity_rate": round(100 * active / total, 1) if total else 0,
-            "last_seen": r["last_seen"],
+            "last_seen": _iso(r["last_seen"]),
             "current_app": cur["app"] if cur else None,
             "current_title": cur["window_title"] if cur else None,
             "current_project": cur["project"] if cur else None,
             "current_state": cur["state"] if cur else None,
         })
-    return {"range": {"from": lo, "to": hi}, "employees": result}
+    return {"range": {"from": _iso(lo), "to": _iso(hi)}, "employees": result}
 
 
 def projects(days, date_from, date_to, employee_id):
@@ -61,4 +68,83 @@ def details(days, date_from, date_to, employee_id):
 def timeline(employee_id, days, date_from, date_to):
     lo, hi = _range(days, date_from, date_to)
     rows = report_repository.fetch_timeline(employee_id, lo, hi)
-    return {"segments": [dict(r) for r in rows]}
+    segments = []
+    for r in rows:
+        d = dict(r)
+        d["start_ts"] = _iso(d["start_ts"])
+        d["end_ts"] = _iso(d["end_ts"])
+        segments.append(d)
+    return {"segments": segments}
+
+
+def project_report(project_id):
+    """Analytique d'un projet : avancement, cumul par jour, par monteur, par app."""
+    meta = report_repository.fetch_project_meta(project_id)
+    if meta is None:
+        return None
+    daily = [
+        {"day": str(r["day"]), "active_sec": r["active_sec"] or 0}
+        for r in report_repository.fetch_project_daily(project_id)
+        if (r["active_sec"] or 0) > 0
+    ]
+    spent = sum(d["active_sec"] for d in daily)
+    by_employee = [
+        {"employee_name": r["employee_name"] or "?", "active_sec": r["active_sec"] or 0}
+        for r in report_repository.fetch_project_by_employee(project_id)
+    ]
+    by_app = [
+        {"app": r["app"] or "(inconnu)", "active_sec": r["active_sec"] or 0}
+        for r in report_repository.fetch_project_by_app(project_id)
+    ]
+    return {
+        "project": {
+            "id": meta["id"],
+            "client": meta["client"] or "",
+            "video_name": meta["video_name"],
+            "version": meta["version"],
+            "estimated_duration_sec": meta["estimated_duration_sec"],
+            "assigned_employee_name": meta["employee_name"],
+            "spent_sec": spent,
+        },
+        "daily": daily,
+        "by_employee": by_employee,
+        "by_app": by_app,
+    }
+
+
+def day_activity(date, employee_id):
+    """Segments d'un jour (YYYY-MM-DD) pour la frise par monteur."""
+    lo = datetime.fromisoformat(date)
+    hi = datetime.fromisoformat(date + "T23:59:59")
+    rows = report_repository.fetch_day_segments(lo, hi, employee_id)
+    segments = [{
+        "employee_id": r["employee_id"],
+        "employee_name": r["employee_name"] or r["employee_id"],
+        "project": r["project"],
+        "state": r["state"],
+        "start_ts": _iso(r["start_ts"]),
+        "end_ts": _iso(r["end_ts"]),
+        "duration_sec": r["duration_sec"] or 0,
+    } for r in rows]
+    return {"segments": segments}
+
+
+def calendar(days, date_from, date_to, employee_id):
+    lo, hi = _range(days, date_from, date_to)
+    rows = report_repository.fetch_calendar(lo, hi, employee_id)
+    events = []
+    for r in rows:
+        active = r["active_sec"] or 0
+        if active <= 0:
+            continue  # on n'affiche que le travail reel (actif)
+        events.append({
+            "day": str(r["day"]),
+            "employee_id": r["employee_id"],
+            "employee_name": r["employee_name"] or r["employee_id"],
+            "client": r["client"],
+            "project": r["project"],
+            "version": r["version"],
+            "active_sec": active,
+            "idle_sec": r["idle_sec"] or 0,
+        })
+    return {"events": events}

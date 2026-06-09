@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 
 from app.realtime import presence
 from app.realtime.schemas import Heartbeat
-from app.security.security import check_agent_key, check_dashboard
+from app.security.security import check_agent_key, get_current_user
 
 router = APIRouter()
 
@@ -22,7 +22,7 @@ def heartbeat(payload: Heartbeat, _=Depends(check_agent_key)):
 
 
 @router.get("/api/live")
-async def live(_=Depends(check_dashboard)):
+async def live(_=Depends(get_current_user)):
     """Flux SSE de la présence pour le dashboard."""
     return StreamingResponse(
         presence.event_stream(),
