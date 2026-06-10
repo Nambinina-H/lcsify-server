@@ -1,5 +1,5 @@
 from app.projects import project_repository
-from app.projects.schemas import ProjectIn
+from app.projects.schemas import ProjectIn, RegisterIn
 
 
 def list_projects():
@@ -24,3 +24,9 @@ def list_for_employee(employee_id):
 
 def list_employees():
     return project_repository.list_employees()
+
+
+def register_employee(payload: RegisterIn):
+    return project_repository.register_employee(
+        payload.employee_id, payload.employee_name
+    )

@@ -39,5 +39,8 @@
 - Données et schéma plats (segments à colonnes texte, projets à client en chaîne) — reset propre
 
 ## 2026-06-10
+**Added**
+- Endpoint `POST /api/register` (clé agent) : l'agent s'enregistre (employee_id + nom) → monteur **visible et assignable sans attendre d'activité**
+
 **Updated**
 - Jeu de démo (`seed_demo.py`) : scénario d'activité courte et fragmentée (test de la frise du calendrier)

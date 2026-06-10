@@ -10,3 +10,11 @@ class ProjectIn(BaseModel):
     estimated_duration_sec: int = Field(0, ge=0)
     assigned_employee_id: str = ""
     assigned_employee_name: str = ""
+
+
+class RegisterIn(BaseModel):
+    """Annonce d'un monteur par l'agent : se fait connaitre de la plateforme
+    (visible + assignable) sans attendre d'activite."""
+
+    employee_id: str = Field(min_length=1)
+    employee_name: str = ""

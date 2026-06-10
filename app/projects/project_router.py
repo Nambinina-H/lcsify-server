@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 
 from app.projects import project_service
-from app.projects.schemas import ProjectIn
+from app.projects.schemas import ProjectIn, RegisterIn
 from app.security.security import check_agent_key, get_current_user, require_admin
 
 router = APIRouter()
@@ -55,3 +55,9 @@ def list_employees(_=Depends(get_current_user)):
 @router.get("/api/assigned-projects")
 def assigned_projects(employee_id: str, _=Depends(check_agent_key)):
     return {"projects": project_service.list_for_employee(employee_id)}
+
+
+@router.post("/api/register")
+def register(payload: RegisterIn, _=Depends(check_agent_key)):
+    """L'agent s'annonce (employee_id + nom) -> visible et assignable de suite."""
+    return project_service.register_employee(payload)

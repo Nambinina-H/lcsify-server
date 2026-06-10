@@ -125,6 +125,24 @@ def delete(project_id):
         return True
 
 
+def register_employee(external_id, name):
+    """Get-or-create du monteur (registre) sans attendre d'activite : il devient
+    visible et assignable des que le nom est configure dans l'agent."""
+    if not external_id:
+        return {"status": "ignored"}
+    with SessionLocal() as session:
+        emp = session.execute(
+            select(Employee).where(Employee.external_id == external_id)
+        ).scalar_one_or_none()
+        if emp is None:
+            emp = Employee(external_id=external_id, name=name or None)
+            session.add(emp)
+        elif name and emp.name != name:
+            emp.name = name  # le nom courant fait foi
+        session.commit()
+    return {"status": "ok", "employee_id": external_id, "employee_name": name}
+
+
 def list_employees():
     """Monteurs connus (registre employees), nom courant."""
     with SessionLocal() as session:
