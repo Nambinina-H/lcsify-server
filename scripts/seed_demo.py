@@ -124,6 +124,34 @@ OVERTIME_CASES = [
 ]
 
 
+# Activite courte et fragmentee sur un jour "propre" (il y a 8 jours, non utilise
+# par les autres donnees) -> plage horaire serree, beaucoup de mini-segments :
+# sert a tester la frise du calendrier (zoom adaptatif + fusion des bandes).
+ACT = "active"
+IDL = "idle"
+SHORT_DAYS_BACK = 8
+SHORT_CASES = [
+    {"client": "Acme Corp", "video": "Court Demo A", "emp_ext": f"alice{DEMO_SUFFIX}",
+     "app": "Adobe Premiere Pro", "hour": 14, "minute": 0,
+     "pattern": [(ACT, 3), (ACT, 2), (IDL, 1), (ACT, 4), (ACT, 3), (IDL, 2), (ACT, 2)]},
+    {"client": "Studio Nova", "video": "Court Demo B", "emp_ext": f"bruno{DEMO_SUFFIX}",
+     "app": "DaVinci Resolve", "hour": 14, "minute": 6,
+     "pattern": [(ACT, 5), (IDL, 1), (ACT, 4), (ACT, 3), (IDL, 1), (ACT, 4)]},
+    {"client": "Maison Belle", "video": "Court Demo C", "emp_ext": f"chloe{DEMO_SUFFIX}",
+     "app": "Adobe After Effects", "hour": 14, "minute": 2,
+     "pattern": [(ACT, 6), (ACT, 5), (IDL, 2), (ACT, 7), (ACT, 6), (IDL, 1), (ACT, 5), (ACT, 5)]},
+    {"client": "Pixel Lab", "video": "Court Demo D", "emp_ext": f"david{DEMO_SUFFIX}",
+     "app": "Final Cut Pro", "hour": 14, "minute": 10,
+     "pattern": [(ACT, 4), (ACT, 3), (ACT, 2), (IDL, 1), (ACT, 3), (ACT, 2)]},
+    {"client": "Orange Media", "video": "Court Demo E", "emp_ext": f"emma{DEMO_SUFFIX}",
+     "app": "Adobe Audition", "hour": 14, "minute": 4,
+     "pattern": [(ACT, 8), (IDL, 2), (ACT, 9), (ACT, 6), (IDL, 1), (ACT, 10)]},
+    {"client": "Zenith Films", "video": "Court Demo F", "emp_ext": f"farid{DEMO_SUFFIX}",
+     "app": "Adobe Premiere Pro", "hour": 14, "minute": 8,
+     "pattern": [(ACT, 4), (ACT, 4), (IDL, 1), (ACT, 5), (ACT, 4), (IDL, 1), (ACT, 3)]},
+]
+
+
 def _now():
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -235,6 +263,26 @@ def _fixed_segments_for(project_id, employee_id, app, video, intervals, now):
     return rows
 
 
+def _fragmented_segments(project_id, employee_id, app, video, hour, minute, pattern, now):
+    """Segments consecutifs (actif/inactif) poses bout a bout depuis hour:minute,
+    sur le jour SHORT_DAYS_BACK. pattern = liste de (state, minutes)."""
+    rows = []
+    title = f"{video} - {app}"
+    day = now - timedelta(days=SHORT_DAYS_BACK)
+    cursor = day.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    for state, minutes in pattern:
+        dur = minutes * 60
+        end = cursor + timedelta(seconds=dur)
+        rows.append({
+            "employee_id": employee_id, "project_id": project_id,
+            "app": app, "window_title": title, "state": state,
+            "started_at": cursor, "ended_at": end,
+            "duration_sec": dur, "received_at": now,
+        })
+        cursor = end
+    return rows
+
+
 def clear():
     with SessionLocal() as session:
         demo_ids = [
@@ -329,6 +377,30 @@ def seed():
                 case["app"],
                 case["video"],
                 case["segments"],
+                now,
+            ):
+                session.add(Segment(**row))
+                n_seg += 1
+
+        for case in SHORT_CASES:
+            project = Project(
+                client_id=client_id(case["client"]),
+                video_name=case["video"],
+                version="V1",
+                estimated_duration_sec=30 * 60,
+                assigned_employee_id=emp_ids[case["emp_ext"]],
+            )
+            session.add(project)
+            session.flush()
+            n_proj += 1
+            for row in _fragmented_segments(
+                project.id,
+                emp_ids[case["emp_ext"]],
+                case["app"],
+                case["video"],
+                case["hour"],
+                case["minute"],
+                case["pattern"],
                 now,
             ):
                 session.add(Segment(**row))

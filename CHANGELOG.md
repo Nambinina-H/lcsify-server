@@ -37,3 +37,7 @@
 
 **Removed**
 - Données et schéma plats (segments à colonnes texte, projets à client en chaîne) — reset propre
+
+## 2026-06-10
+**Updated**
+- Jeu de démo (`seed_demo.py`) : scénario d'activité courte et fragmentée (test de la frise du calendrier)
