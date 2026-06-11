@@ -44,3 +44,14 @@
 
 **Updated**
 - Jeu de démo (`seed_demo.py`) : scénario d'activité courte et fragmentée (test de la frise du calendrier)
+
+## 2026-06-11
+**Added**
+- **Journal d'audit** : table `audit_logs` + domaine `audit` (router → service → repository) ; événements enregistrés sur connexion, création/modification/suppression de projet, config agents et changement de rôle ; `GET /api/admin/audit` (admin, paginé, **recherche `q`** insensible à la casse + **filtre `action`** + **plage de dates `date_from`/`date_to`**)
+- Colonne **`role`** (métier) sur `employees` + `PATCH /api/admin/employees/{id}/role` (admin) ; `role` renvoyé par `GET /api/admin/employees` — migration Alembic `b7c1d2e3f4a5` (appliquée automatiquement au démarrage)
+- **Gestion des utilisateurs** (admin) : `GET/POST/PATCH/DELETE /api/admin/users` + `POST /api/admin/users/{id}/password` (créer, changer rôle/statut, réinitialiser le mot de passe, **supprimer**) avec garde-fous (email unique, ≥ 1 admin actif, pas d'auto-verrouillage ni d'auto-suppression) et audit
+
+- `POST /api/auth/verify-password` (compte connecté) : re-confirme le mot de passe avant une action sensible (sans émettre de jeton ni d'événement de connexion)
+
+**Updated**
+- **Rôle Manager opérationnel** : création/modification de projet désormais autorisées au **Manager** (`require_manager`) ; suppression de projet, config agents, rôles et utilisateurs restent **réservés à l'admin** (`require_admin`)

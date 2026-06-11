@@ -115,6 +115,12 @@ def update(project_id, data):
         return _to_dict(project)
 
 
+def get_dict(project_id):
+    with SessionLocal() as session:
+        project = session.get(Project, project_id)
+        return _to_dict(project) if project else None
+
+
 def delete(project_id):
     with SessionLocal() as session:
         project = session.get(Project, project_id)
@@ -147,11 +153,32 @@ def list_employees():
     """Monteurs connus (registre employees), nom courant."""
     with SessionLocal() as session:
         rows = session.execute(
-            select(Employee.external_id, Employee.name)
+            select(Employee.external_id, Employee.name, Employee.role)
             .where(Employee.is_active.is_(True))
             .order_by(Employee.name)
         ).all()
     return [
-        {"employee_id": r.external_id, "employee_name": r.name or r.external_id}
+        {
+            "employee_id": r.external_id,
+            "employee_name": r.name or r.external_id,
+            "role": r.role,
+        }
         for r in rows
     ]
+
+
+def set_employee_role(external_id, role):
+    """Definit le role metier d'un collaborateur. None/"" = efface."""
+    with SessionLocal() as session:
+        emp = session.execute(
+            select(Employee).where(Employee.external_id == external_id)
+        ).scalar_one_or_none()
+        if emp is None:
+            return None
+        emp.role = role or None
+        session.commit()
+        return {
+            "employee_id": emp.external_id,
+            "employee_name": emp.name or emp.external_id,
+            "role": emp.role,
+        }

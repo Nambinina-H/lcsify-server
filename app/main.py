@@ -6,8 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.agent_config.config_router import router as agent_config_router
+from app.audit.audit_router import router as audit_router
 from app.auth import auth_service
 from app.auth.auth_router import router as auth_router
+from app.auth.users_router import router as users_router
 from app.common.error.handlers import register_exception_handlers
 from app.dashboard.dashboard_router import router as dashboard_router
 from app.database.migrate import run_migrations
@@ -45,12 +47,14 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(users_router)
 app.include_router(ingest_router)
 app.include_router(report_router)
 app.include_router(agent_config_router)
 app.include_router(projects_router)
 app.include_router(realtime_router)
 app.include_router(dashboard_router)
+app.include_router(audit_router)
 
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

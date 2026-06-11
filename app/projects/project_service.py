@@ -14,8 +14,16 @@ def update_project(project_id, payload: ProjectIn):
     return project_repository.update(project_id, payload.model_dump())
 
 
+def get_project(project_id):
+    return project_repository.get_dict(project_id)
+
+
 def delete_project(project_id):
     return project_repository.delete(project_id)
+
+
+def set_employee_role(external_id, role):
+    return project_repository.set_employee_role(external_id, role)
 
 
 def list_for_employee(employee_id):

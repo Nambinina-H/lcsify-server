@@ -12,5 +12,5 @@ class StateEnum(str, Enum):
 class RoleEnum(str, Enum):
     """Roles des comptes manager du dashboard."""
 
-    ADMIN = "admin"      # acces complet (gestion projets, config)
-    MANAGER = "manager"  # lecture seule du dashboard
+    ADMIN = "admin"      # acces complet (dashboard, config, utilisateurs)
+    MANAGER = "manager"  # projets/collaborateurs/calendrier (assigne les projets)

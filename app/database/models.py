@@ -52,6 +52,7 @@ class Employee(Base, TimestampMixin):
     external_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     name: Mapped[str | None] = mapped_column(String(255))
     email: Mapped[str | None] = mapped_column(String(255))
+    role: Mapped[str | None] = mapped_column(String(100))  # metier (Monteur, ...)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
@@ -136,3 +137,26 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
     value: Mapped[str | None] = mapped_column(Text)
+
+
+class AuditLog(Base):
+    """Journal d'audit : qui a fait quoi sur la plateforme (historique)."""
+
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    user_label: Mapped[str | None] = mapped_column(String(255))  # nom fige (snapshot)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)  # ex. project.create
+    summary: Mapped[str] = mapped_column(Text, nullable=False)  # phrase lisible (FR)
+    details: Mapped[str | None] = mapped_column(Text)  # JSON optionnel
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("idx_audit_created", "created_at"),
+        Index("idx_audit_action", "action"),
+    )

@@ -32,7 +32,14 @@ def get_current_user(authorization: str = Header(None)) -> dict:
 
 
 def require_admin(user: dict = Depends(get_current_user)) -> dict:
-    """Reserve aux administrateurs (gestion projets, config agents)."""
+    """Reserve aux administrateurs (config agents, utilisateurs, suppression)."""
     if user.get("role") != RoleEnum.ADMIN.value:
         raise HTTPException(status_code=403, detail="Acces administrateur requis")
+    return user
+
+
+def require_manager(user: dict = Depends(get_current_user)) -> dict:
+    """Admin OU Manager (ex. creation / assignation de projets)."""
+    if user.get("role") not in (RoleEnum.ADMIN.value, RoleEnum.MANAGER.value):
+        raise HTTPException(status_code=403, detail="Acces refuse")
     return user

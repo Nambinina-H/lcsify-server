@@ -12,6 +12,12 @@ class ProjectIn(BaseModel):
     assigned_employee_name: str = ""
 
 
+class EmployeeRoleIn(BaseModel):
+    """Role metier d'un collaborateur (ex. Monteur), modifiable par un admin."""
+
+    role: str | None = None
+
+
 class RegisterIn(BaseModel):
     """Annonce d'un monteur par l'agent : se fait connaitre de la plateforme
     (visible + assignable) sans attendre d'activite."""

@@ -41,6 +41,10 @@ def login(email: str, password: str) -> dict:
         password, user.password_hash
     ):
         raise HTTPException(status_code=401, detail="Identifiants invalides")
+    # Import local pour eviter un cycle auth <-> audit.
+    from app.audit import audit_service
+
+    audit_service.log_event(user, "auth.login", f"Connexion de {user.name}")
     return _tokens_for(user)
 
 
@@ -62,6 +66,12 @@ def me(user_id: int) -> dict:
     if user is None:
         raise HTTPException(status_code=401, detail="Compte introuvable")
     return _user_out(user)
+
+
+def check_password(user_id: int, password: str) -> bool:
+    """Verifie le mot de passe du compte courant (re-confirmation d'action)."""
+    user = auth_repository.get_by_id(user_id)
+    return bool(user and verify_password(password, user.password_hash))
 
 
 def ensure_admin():
