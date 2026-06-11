@@ -228,11 +228,15 @@ def fetch_project_by_app(project_id):
 def fetch_day_segments(lo, hi, employee_id):
     """Tous les segments d'une journee, par monteur (pour la frise du jour)."""
     project = func.coalesce(Project.video_name, "(non identifie)")
+    client = func.coalesce(Client.name, "").label("client")
+    version = func.coalesce(Project.version, "").label("version")
     stmt = (
         select(
             Employee.external_id.label("employee_id"),
             Employee.name.label("employee_name"),
             project.label("project"),
+            client,
+            version,
             Segment.state,
             Segment.started_at.label("start_ts"),
             Segment.ended_at.label("end_ts"),
@@ -240,6 +244,7 @@ def fetch_day_segments(lo, hi, employee_id):
         )
         .join(Employee, Segment.employee_id == Employee.id)
         .outerjoin(Project, Segment.project_id == Project.id)
+        .outerjoin(Client, Project.client_id == Client.id)
         .where(Segment.started_at >= lo, Segment.started_at <= hi)
     )
     if employee_id:

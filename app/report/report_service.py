@@ -121,6 +121,8 @@ def day_activity(date, employee_id):
         "employee_id": r["employee_id"],
         "employee_name": r["employee_name"] or r["employee_id"],
         "project": r["project"],
+        "client": r["client"],
+        "version": r["version"],
         "state": r["state"],
         "start_ts": _iso(r["start_ts"]),
         "end_ts": _iso(r["end_ts"]),

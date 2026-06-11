@@ -52,6 +52,7 @@
 - **Gestion des utilisateurs** (admin) : `GET/POST/PATCH/DELETE /api/admin/users` + `POST /api/admin/users/{id}/password` (créer, changer rôle/statut, réinitialiser le mot de passe, **supprimer**) avec garde-fous (email unique, ≥ 1 admin actif, pas d'auto-verrouillage ni d'auto-suppression) et audit
 
 - `POST /api/auth/verify-password` (compte connecté) : re-confirme le mot de passe avant une action sensible (sans émettre de jeton ni d'événement de connexion)
+- `/api/day-activity` renvoie aussi **client** et **version** des segments (étiquette « Vidéo - client - version » dans la frise du jour)
 
 **Updated**
 - **Rôle Manager opérationnel** : création/modification de projet désormais autorisées au **Manager** (`require_manager`) ; suppression de projet, config agents, rôles et utilisateurs restent **réservés à l'admin** (`require_admin`)
