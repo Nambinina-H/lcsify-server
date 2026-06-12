@@ -1,10 +1,14 @@
+import json
+
 from sqlalchemy import func, select
 
 from app.common.enums import RoleEnum
 from app.database.database_session import SessionLocal
 from app.database.models import User
+from app.security.scopes import clean_scopes, parse_scopes
 
 _ADMIN = RoleEnum.ADMIN.value
+_UNSET = object()  # sentinelle : champ non fourni (vs liste vide qui efface)
 
 
 def _to_dict(u: User) -> dict:
@@ -13,6 +17,7 @@ def _to_dict(u: User) -> dict:
         "email": u.email,
         "name": u.name,
         "role": u.role,
+        "scopes": parse_scopes(u.scopes),
         "is_active": u.is_active,
         "created_at": u.created_at.isoformat() if u.created_at else None,
     }
@@ -35,10 +40,14 @@ def count_users() -> int:
         return session.execute(select(func.count()).select_from(User)).scalar() or 0
 
 
-def create(email: str, password_hash: str, name: str, role: str):
+def create(email: str, password_hash: str, name: str, role: str, scopes=None):
     with SessionLocal() as session:
         user = User(
-            email=email, password_hash=password_hash, name=name, role=role
+            email=email,
+            password_hash=password_hash,
+            name=name,
+            role=role,
+            scopes=json.dumps(clean_scopes(scopes)) if scopes else None,
         )
         session.add(user)
         session.commit()
@@ -70,7 +79,7 @@ def count_active_admins() -> int:
         ).scalar() or 0
 
 
-def update_fields(user_id: int, name=None, role=None, is_active=None):
+def update_fields(user_id: int, name=None, role=None, is_active=None, scopes=_UNSET):
     with SessionLocal() as session:
         user = session.get(User, user_id)
         if user is None:
@@ -81,6 +90,8 @@ def update_fields(user_id: int, name=None, role=None, is_active=None):
             user.role = role
         if is_active is not None:
             user.is_active = is_active
+        if scopes is not _UNSET:  # liste (meme vide) -> on remplace
+            user.scopes = json.dumps(clean_scopes(scopes)) if scopes else None
         session.commit()
         session.refresh(user)
         return _to_dict(user)

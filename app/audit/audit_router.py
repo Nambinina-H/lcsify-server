@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.audit import audit_service
-from app.security.security import require_admin
+from app.security.scopes import require_scope
 
 router = APIRouter()
 
@@ -14,7 +14,7 @@ def list_audit(
     action: str = "",
     date_from: str = "",
     date_to: str = "",
-    _=Depends(require_admin),
+    _=Depends(require_scope("history", "view")),
 ):
     """Journal d'audit (admin) : du plus recent au plus ancien, pagine.
     q : recherche ; action : type ; date_from/date_to : plage (YYYY-MM-DD)."""

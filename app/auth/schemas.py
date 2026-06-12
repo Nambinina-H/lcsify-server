@@ -15,6 +15,7 @@ class UserOut(BaseModel):
     email: str
     name: str
     role: str
+    scopes: list[str] = []
 
 
 class TokenOut(BaseModel):
@@ -32,6 +33,7 @@ class UserAdminOut(BaseModel):
     email: str
     name: str
     role: str
+    scopes: list[str] = []
     is_active: bool
     created_at: str | None = None
 
@@ -41,12 +43,14 @@ class UserCreateIn(BaseModel):
     name: str = Field(min_length=1)
     password: str = Field(min_length=6)
     role: str = "manager"
+    scopes: list[str] = []
 
 
 class UserUpdateIn(BaseModel):
     name: str | None = None
     role: str | None = None
     is_active: bool | None = None
+    scopes: list[str] | None = None
 
 
 class PasswordIn(BaseModel):

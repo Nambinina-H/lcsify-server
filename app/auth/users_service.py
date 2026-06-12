@@ -9,6 +9,11 @@ from app.security.jwt import hash_password
 
 _ROLES = {RoleEnum.ADMIN.value, RoleEnum.MANAGER.value}
 _ADMIN = RoleEnum.ADMIN.value
+_RESERVED = "Action réservée aux administrateurs"
+
+
+def _is_admin(actor: dict) -> bool:
+    return actor.get("role") == _ADMIN
 
 
 def _check_role(role: str):
@@ -21,15 +26,20 @@ def list_users():
 
 
 def create_user(payload: UserCreateIn, actor: dict):
+    # Anti-escalade : un non-admin ne cree que des managers, sans permissions.
+    if not _is_admin(actor) and (payload.role != RoleEnum.MANAGER.value or payload.scopes):
+        raise HTTPException(status_code=403, detail=_RESERVED)
     _check_role(payload.role)
     if auth_repository.get_by_email(payload.email):
         raise HTTPException(status_code=409, detail="Cet email est deja utilise")
+    scopes = payload.scopes if _is_admin(actor) else []
     try:
         user = auth_repository.create(
             email=payload.email,
             password_hash=hash_password(payload.password),
             name=payload.name,
             role=payload.role,
+            scopes=scopes,
         )
     except IntegrityError:
         raise HTTPException(status_code=409, detail="Cet email est deja utilise")
@@ -45,6 +55,14 @@ def update_user(user_id: int, payload: UserUpdateIn, actor: dict):
     current = auth_repository.get_dict(user_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    # Anti-escalade : seul un admin touche aux comptes admin, au role, aux scopes.
+    if not _is_admin(actor):
+        if current["role"] == _ADMIN:
+            raise HTTPException(status_code=403, detail=_RESERVED)
+        if payload.role is not None or payload.scopes is not None:
+            raise HTTPException(status_code=403, detail=_RESERVED)
+
     if payload.role is not None:
         _check_role(payload.role)
 
@@ -71,9 +89,12 @@ def update_user(user_id: int, payload: UserUpdateIn, actor: dict):
             status_code=400, detail="Au moins un administrateur actif est requis"
         )
 
-    updated = auth_repository.update_fields(
-        user_id, name=payload.name, role=payload.role, is_active=payload.is_active
-    )
+    kwargs = {"name": payload.name, "is_active": payload.is_active}
+    if _is_admin(actor):
+        kwargs["role"] = payload.role
+        if payload.scopes is not None:
+            kwargs["scopes"] = payload.scopes
+    updated = auth_repository.update_fields(user_id, **kwargs)
     audit_service.log_event(
         actor,
         "user.update",
@@ -87,6 +108,8 @@ def reset_password(user_id: int, payload: PasswordIn, actor: dict):
     current = auth_repository.get_dict(user_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    if not _is_admin(actor) and current["role"] == _ADMIN:
+        raise HTTPException(status_code=403, detail=_RESERVED)
     auth_repository.set_password(user_id, hash_password(payload.password))
     audit_service.log_event(
         actor, "user.password", f"Mot de passe réinitialisé : {current['name']}"
@@ -98,6 +121,8 @@ def delete_user(user_id: int, actor: dict):
     current = auth_repository.get_dict(user_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    if not _is_admin(actor) and current["role"] == _ADMIN:
+        raise HTTPException(status_code=403, detail=_RESERVED)
     if user_id == actor["id"]:
         raise HTTPException(
             status_code=400, detail="Vous ne pouvez pas supprimer votre propre compte"

@@ -54,6 +54,7 @@
 - `POST /api/auth/verify-password` (compte connecté) : re-confirme le mot de passe avant une action sensible (sans émettre de jeton ni d'événement de connexion)
 - `/api/day-activity` renvoie aussi **client** et **version** des segments (étiquette « Vidéo - client - version » dans la frise du jour)
 - Ingestion : **recalage de l'horloge agent** — si l'agent fournit `client_sent_at`, le serveur corrige le décalage de l'horloge du poste (heures d'activité fiables sans dépendre de l'horloge du PC ; seuil 30 s, durées préservées). Rétro-compatible (agents sans ce champ : aucun changement)
+- **Permissions par utilisateur (scopes)** : colonne `users.scopes` (migration `c3d4e5f6a7b8`) + module `security/scopes` (`require_scope`) ; au-delà du rôle, on accorde `dashboard:view`, `history:view`, `users:view|manage`, `settings:view|manage`. Endpoints audit/config/users gardés par scope ; `/api/auth/me` et la liste users renvoient `scopes`. **Garde-fous anti-escalade** : seul un admin assigne rôle/scopes ; un non-admin ne gère jamais un compte admin et ne se promeut pas
 
 **Updated**
 - **Rôle Manager opérationnel** : création/modification de projet désormais autorisées au **Manager** (`require_manager`) ; suppression de projet, config agents, rôles et utilisateurs restent **réservés à l'admin** (`require_admin`)

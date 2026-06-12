@@ -18,11 +18,14 @@ logger = get_logger()
 
 
 def _user_out(user) -> dict:
+    from app.security.scopes import parse_scopes
+
     return {
         "id": user.id,
         "email": user.email,
         "name": user.name,
         "role": user.role,
+        "scopes": parse_scopes(user.scopes),
     }
 
 
