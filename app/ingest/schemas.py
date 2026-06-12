@@ -20,3 +20,6 @@ class Event(BaseModel):
 
 class EventBatch(BaseModel):
     events: List[Event]
+    # Heure UTC de l'agent au moment de l'envoi : sert a recaler son horloge sur
+    # celle (fiable) du serveur. Optionnel -> compatible avec les anciens agents.
+    client_sent_at: Optional[str] = None

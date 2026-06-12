@@ -53,6 +53,7 @@
 
 - `POST /api/auth/verify-password` (compte connecté) : re-confirme le mot de passe avant une action sensible (sans émettre de jeton ni d'événement de connexion)
 - `/api/day-activity` renvoie aussi **client** et **version** des segments (étiquette « Vidéo - client - version » dans la frise du jour)
+- Ingestion : **recalage de l'horloge agent** — si l'agent fournit `client_sent_at`, le serveur corrige le décalage de l'horloge du poste (heures d'activité fiables sans dépendre de l'horloge du PC ; seuil 30 s, durées préservées). Rétro-compatible (agents sans ce champ : aucun changement)
 
 **Updated**
 - **Rôle Manager opérationnel** : création/modification de projet désormais autorisées au **Manager** (`require_manager`) ; suppression de projet, config agents, rôles et utilisateurs restent **réservés à l'admin** (`require_admin`)
