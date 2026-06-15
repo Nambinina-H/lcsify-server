@@ -121,8 +121,8 @@ class Segment(Base):
     clicks: Mapped[int | None] = mapped_column(Integer, server_default="0")
     received_at: Mapped[datetime | None] = mapped_column(DateTime)
 
-    employee = relationship("Employee")
-    project = relationship("Project")
+    # Pas de relationship() ici : les rapports font des jointures explicites.
+    # Le lien en base reste assure par les ForeignKey ci-dessus.
 
     __table_args__ = (
         UniqueConstraint(
