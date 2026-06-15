@@ -116,6 +116,9 @@ class Segment(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime)
     duration_sec: Mapped[int | None] = mapped_column(Integer)
+    # Clics souris du segment (APM). Nullable : les anciens agents n'en envoient
+    # pas -> NULL traite comme 0 dans les calculs.
+    clicks: Mapped[int | None] = mapped_column(Integer, server_default="0")
     received_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     employee = relationship("Employee")

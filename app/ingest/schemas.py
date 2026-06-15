@@ -16,6 +16,8 @@ class Event(BaseModel):
     start_ts: str
     end_ts: str
     duration_sec: int
+    # Clics souris du segment (APM). Optionnel -> compatible avec les anciens agents.
+    clicks: Optional[int] = 0
 
 
 class EventBatch(BaseModel):

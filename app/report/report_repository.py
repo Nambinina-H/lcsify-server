@@ -22,6 +22,10 @@ def _rows(stmt):
 
 def fetch_summary_totals(lo, hi):
     active = _sum_state(_ACTIVE).label("active_sec")
+    # Clics comptes uniquement sur le temps actif (denominateur de l'APM).
+    clicks = func.sum(
+        case((Segment.state == _ACTIVE, func.coalesce(Segment.clicks, 0)), else_=0)
+    ).label("clicks")
     stmt = (
         select(
             Employee.external_id.label("employee_id"),
@@ -29,6 +33,7 @@ def fetch_summary_totals(lo, hi):
             active,
             _sum_state(_IDLE).label("idle_sec"),
             _sum_state(_PAUSED).label("paused_sec"),
+            clicks,
             func.max(Segment.ended_at).label("last_seen"),
         )
         .join(Employee, Segment.employee_id == Employee.id)

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+from app.agent_config import config_service
 from app.report import report_repository
 
 
@@ -18,18 +19,30 @@ def _iso(dt):
     return dt.replace(tzinfo=timezone.utc).isoformat() if dt else None
 
 
+# Defaut si non configure : en-deca de ce temps actif (cumule sur la periode),
+# l'APM est trop instable pour etre affiche (-> null). Reglable dans Parametres.
+_APM_DEFAULT_MIN_ACTIVE_SEC = 30
+
+
 def summary(days, date_from, date_to):
     lo, hi = _range(days, date_from, date_to)
     rows = report_repository.fetch_summary_totals(lo, hi)
     current = {c["employee_id"]: c for c in report_repository.fetch_current_activity()}
+    apm_min_active = config_service.get_config().get(
+        "apm_min_active_sec", _APM_DEFAULT_MIN_ACTIVE_SEC
+    )
 
     result = []
     for r in rows:
         active = r["active_sec"] or 0
         idle = r["idle_sec"] or 0
         paused = r["paused_sec"] or 0
+        clicks = r["clicks"] or 0
         # La pause n'est ni active ni inactive : exclue du taux d'activite.
         total = active + idle
+        # APM = clics / minutes actives (intensite d'interaction, pas un score
+        # de productivite). Null si trop peu d'actif pour etre fiable.
+        apm = round(clicks / (active / 60), 1) if active >= apm_min_active else None
         cur = current.get(r["employee_id"])
         result.append({
             "employee_id": r["employee_id"],
@@ -37,6 +50,8 @@ def summary(days, date_from, date_to):
             "active_sec": active,
             "idle_sec": idle,
             "paused_sec": paused,
+            "clicks": clicks,
+            "apm": apm,
             "activity_rate": round(100 * active / total, 1) if total else 0,
             "last_seen": _iso(r["last_seen"]),
             "current_app": cur["app"] if cur else None,

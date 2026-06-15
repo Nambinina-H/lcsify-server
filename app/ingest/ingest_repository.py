@@ -146,6 +146,7 @@ def insert_segments(events, client_sent_at=None):
                 "started_at": started_at,
                 "ended_at": ended_at,
                 "duration_sec": e.duration_sec,
+                "clicks": e.clicks or 0,
                 "received_at": now,
             })
 
