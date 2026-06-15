@@ -14,3 +14,4 @@ class Heartbeat(BaseModel):
     app: Optional[str] = None
     window_title: Optional[str] = None
     state: Optional[str] = None
+    agent_version: Optional[str] = None  # version de l'agent (pour l'afficher)
