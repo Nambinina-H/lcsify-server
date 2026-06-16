@@ -58,3 +58,7 @@
 
 **Updated**
 - **Rôle Manager opérationnel** : création/modification de projet désormais autorisées au **Manager** (`require_manager`) ; suppression de projet, config agents, rôles et utilisateurs restent **réservés à l'admin** (`require_admin`)
+
+## 2026-06-16
+**Added**
+- Projets : champ dérivé **`is_current`** dans `GET /api/admin/projects` — marque **LE** projet sur lequel chaque collaborateur travaille en dernier (focus actuel, d'après son **segment d'activité le plus récent**). Distingue « En cours » (un seul à la fois) des autres projets assignés qui passent « En attente ». Calculé à la lecture (**aucune migration, rétroactif**) ; jamais vrai pour un projet terminé

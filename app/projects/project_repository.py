@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, func, select
 
 from app.common.enums import StateEnum
 from app.database.database_session import SessionLocal
@@ -24,6 +24,10 @@ def _to_dict(p: Project):
         "completed_at": p.completed_at.isoformat() if p.completed_at else None,
         "completed_by": p.completed_by,
         "created_by": p.created_by,
+        # Vrai uniquement pour LE projet sur lequel le monteur travaille en
+        # dernier (focus actuel). Rempli par list_all ; les autres lectures
+        # renvoient False (forme constante pour le front).
+        "is_current": False,
         "created_at": p.created_at.isoformat() if p.created_at else None,
         "updated_at": p.updated_at.isoformat() if p.updated_at else None,
     }
@@ -72,16 +76,52 @@ def _spent_lookup(session):
     return {r[0]: (r[1] or 0) for r in rows}
 
 
+def _current_project_by_employee(session):
+    """Pour chaque monteur, le project_id de son segment d'activite le plus
+    recent. Sert a distinguer LE projet « en cours » (focus actuel) des autres
+    projets assignes qui passent « en attente ». Renvoie {employee_id: project_id}.
+    """
+    sub = (
+        select(
+            Segment.employee_id,
+            func.max(Segment.ended_at).label("m"),
+        )
+        .where(Segment.project_id.is_not(None))
+        .group_by(Segment.employee_id)
+        .subquery()
+    )
+    rows = session.execute(
+        select(Segment.employee_id, Segment.project_id)
+        .join(
+            sub,
+            and_(
+                Segment.employee_id == sub.c.employee_id,
+                Segment.ended_at == sub.c.m,
+            ),
+        )
+        .where(Segment.project_id.is_not(None))
+    ).all()
+    return {emp_id: proj_id for emp_id, proj_id in rows}
+
+
 def list_all():
     with SessionLocal() as session:
         projects = session.execute(
             select(Project).order_by(Project.id.desc())
         ).scalars().all()
         spent = _spent_lookup(session)
+        current = _current_project_by_employee(session)
         result = []
         for p in projects:
             d = _to_dict(p)
             d["spent_sec"] = spent.get(p.id, 0)
+            # « En cours » = LE projet du dernier segment du monteur assigne
+            # (un seul a la fois). Jamais pour un projet termine.
+            d["is_current"] = (
+                p.status != "termine"
+                and p.assigned_employee_id is not None
+                and current.get(p.assigned_employee_id) == p.id
+            )
             result.append(d)
         return result
 
