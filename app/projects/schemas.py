@@ -2,9 +2,13 @@ from pydantic import BaseModel, Field
 
 
 class ProjectIn(BaseModel):
-    """Donnees d'un projet (creation / modification)."""
+    """Donnees d'un projet (creation / modification).
 
-    client: str = Field(min_length=1)
+    Le client est designe par `client_id` (selectionne dans la liste geree).
+    `client` (nom) reste accepte en secours / retro-compatibilite."""
+
+    client_id: int | None = None
+    client: str | None = None
     video_name: str = Field(min_length=1)
     version: str = Field(min_length=1)
     estimated_duration_sec: int = Field(0, ge=0)

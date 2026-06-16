@@ -11,6 +11,7 @@ def _to_dict(p: Project):
     """Serialise un projet en parlant 'noms' (client, external_id) pour l'API."""
     return {
         "id": p.id,
+        "client_id": p.client_id,
         "client": p.client.name if p.client else "",
         "video_name": p.video_name,
         "version": p.version,
@@ -23,6 +24,7 @@ def _to_dict(p: Project):
 
 
 def _get_or_create_client(session, name):
+    name = (name or "").strip()
     client = session.execute(
         select(Client).where(Client.name == name)
     ).scalar_one_or_none()
@@ -31,6 +33,16 @@ def _get_or_create_client(session, name):
         session.add(client)
         session.flush()
     return client.id
+
+
+def _resolve_client(session, data):
+    """Client du projet : `client_id` selectionne en priorite ; sinon get-or-create
+    par nom (retro-compatibilite). None si rien -> contrainte NOT NULL en base."""
+    cid = data.get("client_id")
+    if cid:
+        return cid
+    name = (data.get("client") or "").strip()
+    return _get_or_create_client(session, name) if name else None
 
 
 def _resolve_employee(session, external_id):
@@ -84,9 +96,9 @@ def list_for_employee(external_id):
 def create(data):
     with SessionLocal() as session:
         project = Project(
-            client_id=_get_or_create_client(session, data["client"]),
-            video_name=data["video_name"],
-            version=data["version"],
+            client_id=_resolve_client(session, data),
+            video_name=data["video_name"].strip(),
+            version=data["version"].strip(),
             estimated_duration_sec=data.get("estimated_duration_sec", 0),
             assigned_employee_id=_resolve_employee(
                 session, data.get("assigned_employee_id")
@@ -103,9 +115,9 @@ def update(project_id, data):
         project = session.get(Project, project_id)
         if project is None:
             return None
-        project.client_id = _get_or_create_client(session, data["client"])
-        project.video_name = data["video_name"]
-        project.version = data["version"]
+        project.client_id = _resolve_client(session, data)
+        project.video_name = data["video_name"].strip()
+        project.version = data["version"].strip()
         project.estimated_duration_sec = data.get("estimated_duration_sec", 0)
         project.assigned_employee_id = _resolve_employee(
             session, data.get("assigned_employee_id")
