@@ -2,8 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 
 from app.audit import audit_service
+from app.auth import auth_repository
 from app.projects import project_service
-from app.projects.schemas import EmployeeRoleIn, ProjectIn, RegisterIn
+from app.projects.schemas import (
+    EmployeeRoleIn,
+    ProjectCompleteIn,
+    ProjectIn,
+    ProjectStatusIn,
+    RegisterIn,
+)
 from app.security.security import (
     check_agent_key,
     get_current_user,
@@ -61,6 +68,27 @@ def update_project(project_id: int, payload: ProjectIn, user=Depends(require_man
     return updated
 
 
+@router.patch("/api/admin/projects/{project_id}/status")
+def set_project_status(
+    project_id: int, payload: ProjectStatusIn, user=Depends(require_manager)
+):
+    """Manager : marque un projet « termine » ou le « rouvre »."""
+    if payload.status not in ("en_cours", "termine"):
+        raise HTTPException(status_code=422, detail="Statut invalide")
+    db_user = auth_repository.get_by_id(user["id"])
+    by = db_user.name if db_user else None
+    updated = project_service.set_project_status(project_id, payload.status, by)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Projet introuvable")
+    audit_service.log_event(
+        user,
+        "project.status",
+        f"Projet « {_label(updated)} » "
+        + ("marqué terminé" if payload.status == "termine" else "rouvert"),
+    )
+    return updated
+
+
 @router.delete("/api/admin/projects/{project_id}")
 def delete_project(project_id: int, user=Depends(require_admin)):
     project = project_service.get_project(project_id)
@@ -105,3 +133,18 @@ def assigned_projects(employee_id: str, _=Depends(check_agent_key)):
 def register(payload: RegisterIn, _=Depends(check_agent_key)):
     """L'agent s'annonce (employee_id + nom) -> visible et assignable de suite."""
     return project_service.register_employee(payload)
+
+
+@router.post("/api/agent/project-complete")
+def agent_project_complete(payload: ProjectCompleteIn, _=Depends(check_agent_key)):
+    """L'agent (monteur) marque un de SES projets assignes comme termine."""
+    result = project_service.complete_project_for_employee(
+        payload.employee_id, payload.project_id
+    )
+    if result == "not_found":
+        raise HTTPException(status_code=404, detail="Projet introuvable")
+    if result == "forbidden":
+        raise HTTPException(
+            status_code=403, detail="Projet non assigné à ce collaborateur"
+        )
+    return result

@@ -22,6 +22,14 @@ def delete_project(project_id):
     return project_repository.delete(project_id)
 
 
+def set_project_status(project_id, status, by=None):
+    return project_repository.set_status(project_id, status, by)
+
+
+def complete_project_for_employee(external_id, project_id):
+    return project_repository.complete_for_employee(external_id, project_id)
+
+
 def set_employee_role(external_id, role):
     return project_repository.set_employee_role(external_id, role)
 

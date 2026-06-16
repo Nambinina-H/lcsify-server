@@ -16,6 +16,19 @@ class ProjectIn(BaseModel):
     assigned_employee_name: str = ""
 
 
+class ProjectStatusIn(BaseModel):
+    """Statut d'un projet, pose par un manager (terminer / rouvrir)."""
+
+    status: str  # "en_cours" | "termine"
+
+
+class ProjectCompleteIn(BaseModel):
+    """L'agent marque un projet termine (cote monteur)."""
+
+    employee_id: str = Field(min_length=1)
+    project_id: int
+
+
 class EmployeeRoleIn(BaseModel):
     """Role metier d'un collaborateur (ex. Monteur), modifiable par un admin."""
 

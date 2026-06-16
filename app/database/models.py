@@ -84,6 +84,13 @@ class Project(Base, TimestampMixin):
     assigned_employee_id: Mapped[int | None] = mapped_column(
         ForeignKey("employees.id", ondelete="SET NULL")
     )
+    # Statut du livrable : "en_cours" (defaut) ou "termine" (marque par un manager
+    # ou par le monteur depuis l'agent). + qui l'a termine et quand.
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="en_cours"
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    completed_by: Mapped[str | None] = mapped_column(String(255))
 
     client = relationship("Client")
     employee = relationship("Employee")

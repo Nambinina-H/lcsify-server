@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import case, func, select
 
 from app.common.enums import StateEnum
@@ -18,6 +20,9 @@ def _to_dict(p: Project):
         "estimated_duration_sec": p.estimated_duration_sec,
         "assigned_employee_id": p.employee.external_id if p.employee else None,
         "assigned_employee_name": p.employee.name if p.employee else None,
+        "status": p.status,
+        "completed_at": p.completed_at.isoformat() if p.completed_at else None,
+        "completed_by": p.completed_by,
         "created_at": p.created_at.isoformat() if p.created_at else None,
         "updated_at": p.updated_at.isoformat() if p.updated_at else None,
     }
@@ -87,7 +92,10 @@ def list_for_employee(external_id):
             return []
         projects = session.execute(
             select(Project)
-            .where(Project.assigned_employee_id == emp_id)
+            .where(
+                Project.assigned_employee_id == emp_id,
+                Project.status != "termine",  # un projet termine sort de l'agent
+            )
             .order_by(Project.id.desc())
         ).scalars().all()
         return [_to_dict(p) for p in projects]
@@ -141,6 +149,50 @@ def delete(project_id):
         session.delete(project)
         session.commit()
         return True
+
+
+def _now():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def set_status(project_id, status, by=None):
+    """Manager : passe le projet en 'termine' / 'en_cours'. None si introuvable."""
+    with SessionLocal() as session:
+        project = session.get(Project, project_id)
+        if project is None:
+            return None
+        project.status = status
+        if status == "termine":
+            project.completed_at = _now()
+            project.completed_by = by
+        else:
+            project.completed_at = None
+            project.completed_by = None
+        session.commit()
+        session.refresh(project)
+        return _to_dict(project)
+
+
+def complete_for_employee(external_id, project_id):
+    """Agent : un monteur marque SON projet termine. Renvoie 'forbidden' si le
+    projet ne lui est pas assigne, 'not_found' si introuvable, sinon le projet."""
+    with SessionLocal() as session:
+        emp = session.execute(
+            select(Employee).where(Employee.external_id == external_id)
+        ).scalar_one_or_none()
+        if emp is None:
+            return "forbidden"
+        project = session.get(Project, project_id)
+        if project is None:
+            return "not_found"
+        if project.assigned_employee_id != emp.id:
+            return "forbidden"
+        project.status = "termine"
+        project.completed_at = _now()
+        project.completed_by = emp.name or external_id
+        session.commit()
+        session.refresh(project)
+        return _to_dict(project)
 
 
 def register_employee(external_id, name):
