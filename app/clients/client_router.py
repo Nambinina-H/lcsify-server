@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.audit import audit_service
 from app.clients import client_service
 from app.clients.schemas import ClientIn
-from app.security.security import get_current_user, require_admin, require_manager
+from app.security.scopes import require_scope
+from app.security.security import get_current_user, require_manager
 
 router = APIRouter()
 
@@ -36,7 +37,7 @@ def rename_client(client_id: int, payload: ClientIn, user=Depends(require_manage
 
 
 @router.delete("/api/admin/clients/{client_id}")
-def delete_client(client_id: int, user=Depends(require_admin)):
+def delete_client(client_id: int, user=Depends(require_scope("clients", "manage"))):
     result = client_service.delete_client(client_id)
     if result == "not_found":
         raise HTTPException(status_code=404, detail="Client introuvable")

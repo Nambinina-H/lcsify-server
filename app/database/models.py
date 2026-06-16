@@ -91,6 +91,8 @@ class Project(Base, TimestampMixin):
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
     completed_by: Mapped[str | None] = mapped_column(String(255))
+    # Nom (snapshot) de l'utilisateur qui a cree le projet.
+    created_by: Mapped[str | None] = mapped_column(String(255))
 
     client = relationship("Client")
     employee = relationship("Employee")

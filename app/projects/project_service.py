@@ -6,8 +6,8 @@ def list_projects():
     return project_repository.list_all()
 
 
-def create_project(payload: ProjectIn):
-    return project_repository.create(payload.model_dump())
+def create_project(payload: ProjectIn, created_by=None):
+    return project_repository.create(payload.model_dump(), created_by)
 
 
 def update_project(project_id, payload: ProjectIn):

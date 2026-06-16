@@ -122,6 +122,8 @@ def fetch_details(lo, hi, employee_id):
     total = func.sum(Segment.duration_sec).label("active_sec")
     stmt = (
         select(
+            Employee.external_id.label("employee_id"),
+            func.max(Employee.name).label("employee_name"),
             Segment.app,
             title.label("window_title"),
             project.label("project"),
@@ -138,7 +140,7 @@ def fetch_details(lo, hi, employee_id):
     if employee_id:
         stmt = stmt.where(Employee.external_id == employee_id)
     stmt = (
-        stmt.group_by(Segment.app, title, project)
+        stmt.group_by(Employee.external_id, Segment.app, title, project)
         .order_by(total.desc())
         .limit(40)
     )

@@ -11,6 +11,7 @@ from app.projects.schemas import (
     ProjectStatusIn,
     RegisterIn,
 )
+from app.security.scopes import require_scope
 from app.security.security import (
     check_agent_key,
     get_current_user,
@@ -38,8 +39,10 @@ def list_projects(_=Depends(get_current_user)):
 
 @router.post("/api/admin/projects")
 def create_project(payload: ProjectIn, user=Depends(require_manager)):
+    db_user = auth_repository.get_by_id(user["id"])
+    created_by = db_user.name if db_user else None
     try:
-        created = project_service.create_project(payload)
+        created = project_service.create_project(payload, created_by)
     except IntegrityError:
         raise HTTPException(status_code=409, detail=_DUPLICATE)
     audit_service.log_event(
@@ -90,7 +93,7 @@ def set_project_status(
 
 
 @router.delete("/api/admin/projects/{project_id}")
-def delete_project(project_id: int, user=Depends(require_admin)):
+def delete_project(project_id: int, user=Depends(require_scope("projects", "manage"))):
     project = project_service.get_project(project_id)
     if project is None or not project_service.delete_project(project_id):
         raise HTTPException(status_code=404, detail="Projet introuvable")

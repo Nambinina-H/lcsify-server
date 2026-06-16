@@ -10,15 +10,17 @@ from fastapi import Depends, HTTPException
 from app.common.enums import RoleEnum
 from app.security.security import get_current_user
 
-# Domaines accordables. Certains n'ont pas de sens en ecriture (lecture seule).
-DOMAINS = ("dashboard", "history", "users", "settings")
-_VIEW_ONLY = ("dashboard", "history")
+# Domaines accordables. Certains sont lecture seule, d'autres ecriture seule.
+DOMAINS = ("dashboard", "history", "users", "settings", "projects", "clients")
+_VIEW_ONLY = ("dashboard", "history")        # seulement :view (la page se voit)
+_MANAGE_ONLY = ("projects", "clients")       # seulement :manage (ex. suppression)
 
 
 def _allowed():
     allowed = set()
     for d in DOMAINS:
-        allowed.add(f"{d}:view")
+        if d not in _MANAGE_ONLY:
+            allowed.add(f"{d}:view")
         if d not in _VIEW_ONLY:
             allowed.add(f"{d}:manage")
     return allowed

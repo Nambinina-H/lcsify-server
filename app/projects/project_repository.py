@@ -23,6 +23,7 @@ def _to_dict(p: Project):
         "status": p.status,
         "completed_at": p.completed_at.isoformat() if p.completed_at else None,
         "completed_by": p.completed_by,
+        "created_by": p.created_by,
         "created_at": p.created_at.isoformat() if p.created_at else None,
         "updated_at": p.updated_at.isoformat() if p.updated_at else None,
     }
@@ -101,7 +102,7 @@ def list_for_employee(external_id):
         return [_to_dict(p) for p in projects]
 
 
-def create(data):
+def create(data, created_by=None):
     with SessionLocal() as session:
         project = Project(
             client_id=_resolve_client(session, data),
@@ -111,6 +112,7 @@ def create(data):
             assigned_employee_id=_resolve_employee(
                 session, data.get("assigned_employee_id")
             ),
+            created_by=created_by,
         )
         session.add(project)
         session.commit()
