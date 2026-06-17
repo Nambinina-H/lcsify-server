@@ -16,7 +16,6 @@ from app.security.scopes import require_scope
 from app.security.security import (
     check_agent_key,
     get_current_user,
-    require_admin,
     require_manager,
 )
 
@@ -123,9 +122,12 @@ def list_employees(_=Depends(get_current_user)):
 
 @router.patch("/api/admin/employees/{employee_id}/role")
 def set_employee_role(
-    employee_id: str, payload: EmployeeRoleIn, user=Depends(require_admin)
+    employee_id: str,
+    payload: EmployeeRoleIn,
+    user=Depends(require_scope("collaborators", "manage")),
 ):
-    """Definit le role metier (Monteur, ...) d'un collaborateur."""
+    """Definit le role metier (Monteur, ...) d'un collaborateur (admin ou scope
+    `collaborators:manage`)."""
     updated = project_service.set_employee_role(employee_id, payload.role)
     if updated is None:
         raise HTTPException(status_code=404, detail="Collaborateur introuvable")
