@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, case, func, select, text
+from sqlalchemy import update as sa_update
 
 from app.common.enums import StateEnum
 from app.database.database_session import SessionLocal
@@ -274,24 +275,65 @@ def register_employee(external_id, name, previous_id=None):
         emp = session.execute(
             select(Employee).where(Employee.external_id == external_id)
         ).scalar_one_or_none()
-
-        # Migration unique : renommer l'ancien identifiant vers le nouveau.
-        if emp is None and previous_id and previous_id != external_id:
+        prev = None
+        if previous_id and previous_id != external_id:
             prev = session.execute(
                 select(Employee).where(Employee.external_id == previous_id)
             ).scalar_one_or_none()
-            if prev is not None:
-                prev.external_id = external_id
-                if name:
-                    prev.name = name
-                prev.is_active = True
-                session.commit()
-                return {
-                    "status": "migrated",
-                    "employee_id": external_id,
-                    "employee_name": name,
-                }
 
+        # Cas 1 : les DEUX existent (course de migration v1.0.8) -> FUSION de
+        # l'ancien dans le nouveau. Toutes les donnees passent sous le nouvel
+        # identifiant (nom@PC), puis l'ancien est supprime. Auto-reparation des
+        # doublons au prochain register de l'agent.
+        if prev is not None and emp is not None and prev.id != emp.id:
+            # 1) retire les segments de `prev` qui feraient doublon avec `emp`
+            #    (contrainte d'unicite) ; portable Postgres/SQLite via COALESCE.
+            session.execute(
+                text(
+                    "DELETE FROM segments WHERE employee_id = :old AND EXISTS ("
+                    " SELECT 1 FROM segments n WHERE n.employee_id = :new"
+                    " AND n.started_at = segments.started_at"
+                    " AND COALESCE(n.app,'') = COALESCE(segments.app,'')"
+                    " AND COALESCE(n.window_title,'') = COALESCE(segments.window_title,'')"
+                    " AND COALESCE(n.state,'') = COALESCE(segments.state,''))"
+                ),
+                {"old": prev.id, "new": emp.id},
+            )
+            session.execute(
+                sa_update(Segment)
+                .where(Segment.employee_id == prev.id)
+                .values(employee_id=emp.id)
+            )
+            session.execute(
+                sa_update(Project)
+                .where(Project.assigned_employee_id == prev.id)
+                .values(assigned_employee_id=emp.id)
+            )
+            session.delete(prev)
+            if name:
+                emp.name = name
+            emp.is_active = True
+            session.commit()
+            return {
+                "status": "merged",
+                "employee_id": external_id,
+                "employee_name": name,
+            }
+
+        # Cas 2 : seul l'ancien existe -> renommage propre (migration).
+        if prev is not None and emp is None:
+            prev.external_id = external_id
+            if name:
+                prev.name = name
+            prev.is_active = True
+            session.commit()
+            return {
+                "status": "migrated",
+                "employee_id": external_id,
+                "employee_name": name,
+            }
+
+        # Cas 3 : get-or-create classique.
         if emp is None:
             emp = Employee(external_id=external_id, name=name or None)
             session.add(emp)
