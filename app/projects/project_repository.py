@@ -259,20 +259,46 @@ def complete_for_employee(external_id, project_id):
         return _to_dict(project)
 
 
-def register_employee(external_id, name):
+def register_employee(external_id, name, previous_id=None):
     """Get-or-create du monteur (registre) sans attendre d'activite : il devient
-    visible et assignable des que le nom est configure dans l'agent."""
+    visible et assignable des que le nom est configure dans l'agent.
+
+    Migration d'identite (machine -> nom@PC) : si `previous_id` est fourni, qu'un
+    enregistrement existe encore sous cet ancien identifiant et qu'AUCUN n'existe
+    sous le nouveau, on RENOMME l'ancien (les segments/projets, lies par l'id
+    interne, suivent automatiquement). Sinon, get-or-create classique.
+    """
     if not external_id:
         return {"status": "ignored"}
     with SessionLocal() as session:
         emp = session.execute(
             select(Employee).where(Employee.external_id == external_id)
         ).scalar_one_or_none()
+
+        # Migration unique : renommer l'ancien identifiant vers le nouveau.
+        if emp is None and previous_id and previous_id != external_id:
+            prev = session.execute(
+                select(Employee).where(Employee.external_id == previous_id)
+            ).scalar_one_or_none()
+            if prev is not None:
+                prev.external_id = external_id
+                if name:
+                    prev.name = name
+                prev.is_active = True
+                session.commit()
+                return {
+                    "status": "migrated",
+                    "employee_id": external_id,
+                    "employee_name": name,
+                }
+
         if emp is None:
             emp = Employee(external_id=external_id, name=name or None)
             session.add(emp)
-        elif name and emp.name != name:
-            emp.name = name  # le nom courant fait foi
+        else:
+            if name and emp.name != name:
+                emp.name = name  # le nom courant fait foi
+            emp.is_active = True  # un agent qui se (re)connecte est actif
         session.commit()
     return {"status": "ok", "employee_id": external_id, "employee_name": name}
 

@@ -48,5 +48,5 @@ def list_employees():
 
 def register_employee(payload: RegisterIn):
     return project_repository.register_employee(
-        payload.employee_id, payload.employee_name
+        payload.employee_id, payload.employee_name, payload.previous_id
     )

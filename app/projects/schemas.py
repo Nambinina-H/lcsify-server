@@ -48,3 +48,7 @@ class RegisterIn(BaseModel):
 
     employee_id: str = Field(min_length=1)
     employee_name: str = ""
+    # Ancien identifiant (machine) envoye par l'agent pour la MIGRATION unique
+    # vers l'identite basee sur le nom (nom@PC) : si l'ancien existe encore et que
+    # le nouveau n'existe pas, on renomme (les donnees suivent). Optionnel.
+    previous_id: str | None = None
