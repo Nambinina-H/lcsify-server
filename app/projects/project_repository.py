@@ -24,6 +24,7 @@ def _to_dict(p: Project):
         "completed_at": p.completed_at.isoformat() if p.completed_at else None,
         "completed_by": p.completed_by,
         "created_by": p.created_by,
+        "priority": p.priority,
         # Vrai uniquement pour LE projet sur lequel le monteur travaille en
         # dernier (focus actuel). Rempli par list_all ; les autres lectures
         # renvoient False (forme constante pour le front).
@@ -137,9 +138,18 @@ def list_for_employee(external_id):
                 Project.assigned_employee_id == emp_id,
                 Project.status != "termine",  # un projet termine sort de l'agent
             )
-            .order_by(Project.id.desc())
+            # Ordre de priorite : 1, 2, 3... d'abord ; les non priorises (0)
+            # en dernier (plus recent en tete).
+            .order_by(
+                case((Project.priority == 0, 1), else_=0),
+                Project.priority,
+                Project.id.desc(),
+            )
         ).scalars().all()
-        return [_to_dict(p) for p in projects]
+        # `spent_sec` : temps actif cote serveur (= ce qu'affiche le dashboard).
+        # L'agent l'utilise pour caler son compteur sur le serveur.
+        spent = _spent_lookup(session)
+        return [{**_to_dict(p), "spent_sec": spent.get(p.id, 0)} for p in projects]
 
 
 def create(data, created_by=None):
@@ -213,6 +223,18 @@ def set_status(project_id, status, by=None):
         session.commit()
         session.refresh(project)
         return _to_dict(project)
+
+
+def set_priorities(ordered_ids):
+    """Enregistre l'ordre de priorite : priority = 1, 2, 3... dans l'ordre fourni
+    (du plus prioritaire au moins prioritaire). Les ids inconnus sont ignores."""
+    with SessionLocal() as session:
+        for idx, pid in enumerate(ordered_ids, start=1):
+            project = session.get(Project, pid)
+            if project is not None:
+                project.priority = idx
+        session.commit()
+    return {"status": "ok", "count": len(ordered_ids)}
 
 
 def complete_for_employee(external_id, project_id):

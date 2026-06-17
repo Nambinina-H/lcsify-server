@@ -93,6 +93,9 @@ class Project(Base, TimestampMixin):
     completed_by: Mapped[str | None] = mapped_column(String(255))
     # Nom (snapshot) de l'utilisateur qui a cree le projet.
     created_by: Mapped[str | None] = mapped_column(String(255))
+    # Priorite pour le collaborateur assigne : 1 = plus prioritaire ; 0 = non
+    # priorise (classe en dernier). Ordonne la liste affichee dans l'agent.
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     client = relationship("Client")
     employee = relationship("Employee")

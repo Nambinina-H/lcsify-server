@@ -8,6 +8,7 @@ from app.projects.schemas import (
     EmployeeRoleIn,
     ProjectCompleteIn,
     ProjectIn,
+    ProjectPriorityIn,
     ProjectStatusIn,
     RegisterIn,
 )
@@ -52,6 +53,18 @@ def create_project(payload: ProjectIn, user=Depends(require_manager)):
         details=payload.model_dump(),
     )
     return created
+
+
+@router.put("/api/admin/projects/priority")
+def set_projects_priority(payload: ProjectPriorityIn, user=Depends(require_manager)):
+    """Manager : enregistre l'ordre de priorite des projets d'un collaborateur
+    (priority = 1, 2, 3... dans l'ordre fourni). Declaree AVANT la route
+    `{project_id}` pour ne pas etre captee par celle-ci."""
+    result = project_service.set_priorities(payload.ordered_ids)
+    audit_service.log_event(
+        user, "project.priority", "Priorité des projets mise à jour"
+    )
+    return result
 
 
 @router.put("/api/admin/projects/{project_id}")

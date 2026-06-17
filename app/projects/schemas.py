@@ -22,6 +22,13 @@ class ProjectStatusIn(BaseModel):
     status: str  # "en_cours" | "termine"
 
 
+class ProjectPriorityIn(BaseModel):
+    """Nouvel ordre de priorite des projets d'un collaborateur, du plus au moins
+    prioritaire. On enregistre priority = 1, 2, 3... dans cet ordre."""
+
+    ordered_ids: list[int] = Field(min_length=1)
+
+
 class ProjectCompleteIn(BaseModel):
     """L'agent marque un projet termine (cote monteur)."""
 

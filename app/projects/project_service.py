@@ -26,6 +26,10 @@ def set_project_status(project_id, status, by=None):
     return project_repository.set_status(project_id, status, by)
 
 
+def set_priorities(ordered_ids):
+    return project_repository.set_priorities(ordered_ids)
+
+
 def complete_project_for_employee(external_id, project_id):
     return project_repository.complete_for_employee(external_id, project_id)
 
