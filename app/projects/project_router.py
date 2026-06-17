@@ -5,6 +5,7 @@ from app.audit import audit_service
 from app.auth import auth_repository
 from app.projects import project_service
 from app.projects.schemas import (
+    AgentRoleIn,
     EmployeeRoleIn,
     ProjectCompleteIn,
     ProjectIn,
@@ -149,8 +150,19 @@ def assigned_projects(employee_id: str, _=Depends(check_agent_key)):
 
 @router.post("/api/register")
 def register(payload: RegisterIn, _=Depends(check_agent_key)):
-    """L'agent s'annonce (employee_id + nom) -> visible et assignable de suite."""
+    """L'agent s'annonce (employee_id + nom) -> visible et assignable de suite.
+    La reponse inclut le `role` courant (affiche dans l'agent)."""
     return project_service.register_employee(payload)
+
+
+@router.post("/api/agent/role")
+def agent_set_role(payload: AgentRoleIn, _=Depends(check_agent_key)):
+    """L'agent definit le role metier du collaborateur (ecran Parametres). Meme
+    champ que la page Collaborateurs (un manager peut aussi le modifier)."""
+    updated = project_service.set_employee_role(payload.employee_id, payload.role)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Collaborateur introuvable")
+    return updated
 
 
 @router.post("/api/agent/project-complete")

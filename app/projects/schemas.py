@@ -42,6 +42,14 @@ class EmployeeRoleIn(BaseModel):
     role: str | None = None
 
 
+class AgentRoleIn(BaseModel):
+    """L'agent definit le role metier du collaborateur (ecran Parametres). Meme
+    champ que la page Collaborateurs."""
+
+    employee_id: str = Field(min_length=1)
+    role: str | None = None
+
+
 class RegisterIn(BaseModel):
     """Annonce d'un monteur par l'agent : se fait connaitre de la plateforme
     (visible + assignable) sans attendre d'activite."""

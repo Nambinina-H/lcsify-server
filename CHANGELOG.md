@@ -68,6 +68,7 @@
 - **Priorisation des projets** : colonne `priority` sur `projects` (migration `a7b8c9d0e1f2`) + `PUT /api/admin/projects/priority` (manager) pour enregistrer l'ordre des projets d'un collaborateur (priority = 1, 2, 3…). `GET /api/assigned-projects` et la liste admin renvoient les projets **triés par priorité** ; audit `project.priority`
 - `GET /api/assigned-projects` renvoie aussi **`spent_sec`** par projet (temps actif = ce qu'affiche le dashboard) : l'agent cale son compteur sur le serveur, fin des écarts agent/plateforme
 - **Scope `collaborators:manage`** : l'édition du rôle métier d'un collaborateur (`PATCH /api/admin/employees/{id}/role`) n'est plus réservée à l'admin — elle est **accordable à un manager** via ce scope (admin garde tout). Refus (403) sans le scope
+- **Rôle depuis l'agent** : `POST /api/agent/role` (clé agent) permet au collaborateur de définir son rôle métier depuis l'écran Paramètres de l'agent — **même champ** que la page Collaborateurs. `POST /api/register` renvoie désormais le **`role`** courant (l'agent l'affiche ; il ne l'écrase jamais à la synchro)
 - **Migration d'identité dans `POST /api/register`** : champ optionnel **`previous_id`** — si l'ancien identifiant (machine) existe encore et que le nouveau (`nom@PC`) n'existe pas, le serveur **renomme** l'enregistrement (les segments/projets, liés par l'id interne, suivent → aucune perte). Prépare l'identité **par personne** (agent v1.0.8). Un agent qui se (re)connecte est **réactivé** (`is_active`). Rétro-compatible : sans `previous_id`, comportement inchangé
 
 **Fixed**

@@ -318,6 +318,7 @@ def register_employee(external_id, name, previous_id=None):
                 "status": "merged",
                 "employee_id": external_id,
                 "employee_name": name,
+                "role": emp.role,
             }
 
         # Cas 2 : seul l'ancien existe -> renommage propre (migration).
@@ -331,6 +332,7 @@ def register_employee(external_id, name, previous_id=None):
                 "status": "migrated",
                 "employee_id": external_id,
                 "employee_name": name,
+                "role": prev.role,
             }
 
         # Cas 3 : get-or-create classique.
@@ -342,7 +344,13 @@ def register_employee(external_id, name, previous_id=None):
                 emp.name = name  # le nom courant fait foi
             emp.is_active = True  # un agent qui se (re)connecte est actif
         session.commit()
-    return {"status": "ok", "employee_id": external_id, "employee_name": name}
+        role = emp.role
+    return {
+        "status": "ok",
+        "employee_id": external_id,
+        "employee_name": name,
+        "role": role,
+    }
 
 
 def list_employees():
