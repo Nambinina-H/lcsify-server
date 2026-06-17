@@ -12,8 +12,9 @@ def summary(
     days: int = 7,
     date_from: str | None = None,
     date_to: str | None = None,
+    space_id: int | None = None,
 ):
-    return report_service.summary(days, date_from, date_to)
+    return report_service.summary(days, date_from, date_to, space_id)
 
 
 @router.get("/api/projects")
@@ -23,8 +24,9 @@ def projects(
     date_from: str | None = None,
     date_to: str | None = None,
     employee_id: str | None = None,
+    space_id: int | None = None,
 ):
-    return report_service.projects(days, date_from, date_to, employee_id)
+    return report_service.projects(days, date_from, date_to, employee_id, space_id)
 
 
 @router.get("/api/apps")
@@ -34,8 +36,9 @@ def apps(
     date_from: str | None = None,
     date_to: str | None = None,
     employee_id: str | None = None,
+    space_id: int | None = None,
 ):
-    return report_service.apps(days, date_from, date_to, employee_id)
+    return report_service.apps(days, date_from, date_to, employee_id, space_id)
 
 
 @router.get("/api/details")
@@ -45,8 +48,9 @@ def details(
     date_from: str | None = None,
     date_to: str | None = None,
     employee_id: str | None = None,
+    space_id: int | None = None,
 ):
-    return report_service.details(days, date_from, date_to, employee_id)
+    return report_service.details(days, date_from, date_to, employee_id, space_id)
 
 
 @router.get("/api/timeline")
@@ -67,8 +71,9 @@ def calendar(
     date_from: str | None = None,
     date_to: str | None = None,
     employee_id: str | None = None,
+    space_id: int | None = None,
 ):
-    return report_service.calendar(days, date_from, date_to, employee_id)
+    return report_service.calendar(days, date_from, date_to, employee_id, space_id)
 
 
 @router.get("/api/day-activity")
@@ -76,8 +81,9 @@ def day_activity(
     date: str,
     _=Depends(get_current_user),
     employee_id: str | None = None,
+    space_id: int | None = None,
 ):
-    return report_service.day_activity(date, employee_id)
+    return report_service.day_activity(date, employee_id, space_id)
 
 
 @router.get("/api/project-report")

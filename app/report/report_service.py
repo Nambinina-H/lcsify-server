@@ -24,9 +24,9 @@ def _iso(dt):
 _APM_DEFAULT_MIN_ACTIVE_SEC = 30
 
 
-def summary(days, date_from, date_to):
+def summary(days, date_from, date_to, space_id=None):
     lo, hi = _range(days, date_from, date_to)
-    rows = report_repository.fetch_summary_totals(lo, hi)
+    rows = report_repository.fetch_summary_totals(lo, hi, space_id)
     current = {c["employee_id"]: c for c in report_repository.fetch_current_activity()}
     apm_min_active = config_service.get_config().get(
         "apm_min_active_sec", _APM_DEFAULT_MIN_ACTIVE_SEC
@@ -62,21 +62,21 @@ def summary(days, date_from, date_to):
     return {"range": {"from": _iso(lo), "to": _iso(hi)}, "employees": result}
 
 
-def projects(days, date_from, date_to, employee_id):
+def projects(days, date_from, date_to, employee_id, space_id=None):
     lo, hi = _range(days, date_from, date_to)
-    rows = report_repository.fetch_projects(lo, hi, employee_id)
+    rows = report_repository.fetch_projects(lo, hi, employee_id, space_id)
     return {"projects": [dict(r) for r in rows]}
 
 
-def apps(days, date_from, date_to, employee_id):
+def apps(days, date_from, date_to, employee_id, space_id=None):
     lo, hi = _range(days, date_from, date_to)
-    rows = report_repository.fetch_apps(lo, hi, employee_id)
+    rows = report_repository.fetch_apps(lo, hi, employee_id, space_id)
     return {"apps": [dict(r) for r in rows]}
 
 
-def details(days, date_from, date_to, employee_id):
+def details(days, date_from, date_to, employee_id, space_id=None):
     lo, hi = _range(days, date_from, date_to)
-    rows = report_repository.fetch_details(lo, hi, employee_id)
+    rows = report_repository.fetch_details(lo, hi, employee_id, space_id)
     return {"details": [dict(r) for r in rows]}
 
 
@@ -127,11 +127,11 @@ def project_report(project_id):
     }
 
 
-def day_activity(date, employee_id):
+def day_activity(date, employee_id, space_id=None):
     """Segments d'un jour (YYYY-MM-DD) pour la frise par monteur."""
     lo = datetime.fromisoformat(date)
     hi = datetime.fromisoformat(date + "T23:59:59")
-    rows = report_repository.fetch_day_segments(lo, hi, employee_id)
+    rows = report_repository.fetch_day_segments(lo, hi, employee_id, space_id)
     segments = [{
         "employee_id": r["employee_id"],
         "employee_name": r["employee_name"] or r["employee_id"],
@@ -146,9 +146,9 @@ def day_activity(date, employee_id):
     return {"segments": segments}
 
 
-def calendar(days, date_from, date_to, employee_id):
+def calendar(days, date_from, date_to, employee_id, space_id=None):
     lo, hi = _range(days, date_from, date_to)
-    rows = report_repository.fetch_calendar(lo, hi, employee_id)
+    rows = report_repository.fetch_calendar(lo, hi, employee_id, space_id)
     events = []
     for r in rows:
         active = r["active_sec"] or 0

@@ -20,6 +20,7 @@ from app.logging_config import get_logger, setup_logging
 from app.projects.project_router import router as projects_router
 from app.realtime.realtime_router import router as realtime_router
 from app.report.report_router import router as report_router
+from app.spaces.space_router import router as spaces_router
 
 
 @asynccontextmanager
@@ -57,6 +58,7 @@ app.include_router(clients_router)
 app.include_router(realtime_router)
 app.include_router(dashboard_router)
 app.include_router(audit_router)
+app.include_router(spaces_router)
 
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

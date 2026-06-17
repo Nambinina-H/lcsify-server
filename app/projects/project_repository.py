@@ -357,7 +357,9 @@ def list_employees():
     """Monteurs connus (registre employees), nom courant."""
     with SessionLocal() as session:
         rows = session.execute(
-            select(Employee.external_id, Employee.name, Employee.role)
+            select(
+                Employee.external_id, Employee.name, Employee.role, Employee.space_id
+            )
             .where(Employee.is_active.is_(True))
             .order_by(Employee.name)
         ).all()
@@ -366,6 +368,7 @@ def list_employees():
             "employee_id": r.external_id,
             "employee_name": r.name or r.external_id,
             "role": r.role,
+            "space_id": r.space_id,
         }
         for r in rows
     ]

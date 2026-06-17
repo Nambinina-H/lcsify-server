@@ -20,7 +20,7 @@ def _rows(stmt):
         return session.execute(stmt).mappings().all()
 
 
-def fetch_summary_totals(lo, hi):
+def fetch_summary_totals(lo, hi, space_id=None):
     active = _sum_state(_ACTIVE).label("active_sec")
     # Clics comptes uniquement sur le temps actif (denominateur de l'APM).
     clicks = func.sum(
@@ -38,9 +38,10 @@ def fetch_summary_totals(lo, hi):
         )
         .join(Employee, Segment.employee_id == Employee.id)
         .where(Segment.started_at >= lo, Segment.started_at <= hi)
-        .group_by(Employee.external_id)
-        .order_by(active.desc())
     )
+    if space_id is not None:
+        stmt = stmt.where(Employee.space_id == space_id)
+    stmt = stmt.group_by(Employee.external_id).order_by(active.desc())
     return _rows(stmt)
 
 
@@ -76,7 +77,7 @@ def fetch_current_activity():
     return _rows(stmt)
 
 
-def fetch_projects(lo, hi, employee_id):
+def fetch_projects(lo, hi, employee_id, space_id=None):
     project = func.coalesce(Project.video_name, "(non identifie)")
     total = func.sum(Segment.duration_sec).label("active_sec")
     stmt = (
@@ -95,11 +96,13 @@ def fetch_projects(lo, hi, employee_id):
     )
     if employee_id:
         stmt = stmt.where(Employee.external_id == employee_id)
+    if space_id is not None:
+        stmt = stmt.where(Employee.space_id == space_id)
     stmt = stmt.group_by(project, Employee.external_id).order_by(total.desc())
     return _rows(stmt)
 
 
-def fetch_apps(lo, hi, employee_id):
+def fetch_apps(lo, hi, employee_id, space_id=None):
     total = func.sum(Segment.duration_sec).label("active_sec")
     stmt = (
         select(Segment.app, total)
@@ -112,11 +115,13 @@ def fetch_apps(lo, hi, employee_id):
     )
     if employee_id:
         stmt = stmt.where(Employee.external_id == employee_id)
+    if space_id is not None:
+        stmt = stmt.where(Employee.space_id == space_id)
     stmt = stmt.group_by(Segment.app).order_by(total.desc()).limit(20)
     return _rows(stmt)
 
 
-def fetch_details(lo, hi, employee_id):
+def fetch_details(lo, hi, employee_id, space_id=None):
     title = func.coalesce(func.nullif(Segment.window_title, ""), "(sans titre)")
     project = func.coalesce(Project.video_name, "(non identifie)")
     total = func.sum(Segment.duration_sec).label("active_sec")
@@ -139,6 +144,8 @@ def fetch_details(lo, hi, employee_id):
     )
     if employee_id:
         stmt = stmt.where(Employee.external_id == employee_id)
+    if space_id is not None:
+        stmt = stmt.where(Employee.space_id == space_id)
     stmt = (
         stmt.group_by(Employee.external_id, Segment.app, title, project)
         .order_by(total.desc())
@@ -147,7 +154,7 @@ def fetch_details(lo, hi, employee_id):
     return _rows(stmt)
 
 
-def fetch_calendar(lo, hi, employee_id):
+def fetch_calendar(lo, hi, employee_id, space_id=None):
     """Activite reelle agregee par jour / monteur / livrable."""
     day = func.date(Segment.started_at).label("day")
     client = func.coalesce(Client.name, "").label("client")
@@ -171,6 +178,8 @@ def fetch_calendar(lo, hi, employee_id):
     )
     if employee_id:
         stmt = stmt.where(Employee.external_id == employee_id)
+    if space_id is not None:
+        stmt = stmt.where(Employee.space_id == space_id)
     stmt = stmt.group_by(
         day, Employee.external_id, client, project, version
     ).order_by(day)
@@ -232,7 +241,7 @@ def fetch_project_by_app(project_id):
     return _rows(stmt)
 
 
-def fetch_day_segments(lo, hi, employee_id):
+def fetch_day_segments(lo, hi, employee_id, space_id=None):
     """Tous les segments d'une journee, par monteur (pour la frise du jour)."""
     project = func.coalesce(Project.video_name, "(non identifie)")
     client = func.coalesce(Client.name, "").label("client")
@@ -256,6 +265,8 @@ def fetch_day_segments(lo, hi, employee_id):
     )
     if employee_id:
         stmt = stmt.where(Employee.external_id == employee_id)
+    if space_id is not None:
+        stmt = stmt.where(Employee.space_id == space_id)
     stmt = stmt.order_by(Employee.name, Segment.started_at)
     return _rows(stmt)
 

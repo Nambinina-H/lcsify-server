@@ -45,6 +45,19 @@ class User(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+class Space(Base, TimestampMixin):
+    """Espace : categorie de collaborateurs (Monteurs, Marketing, Dev...). Le
+    dashboard se filtre par espace ; un collaborateur appartient a un seul espace
+    (Employee.space_id). Couleur + icone pour le selecteur de la sidebar."""
+
+    __tablename__ = "spaces"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    color: Mapped[str] = mapped_column(String(20), nullable=False, server_default="#1d4ed8")
+    icon: Mapped[str] = mapped_column(String(40), nullable=False, server_default="grid")
+
+
 class Employee(Base, TimestampMixin):
     """Monteur (registre central). external_id = identite machine 'user@host'."""
 
@@ -56,6 +69,11 @@ class Employee(Base, TimestampMixin):
     email: Mapped[str | None] = mapped_column(String(255))
     role: Mapped[str | None] = mapped_column(String(100))  # metier (Monteur, ...)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Espace d'appartenance (categorie). NULL = non classe. SET NULL si l'espace
+    # est supprime (le collaborateur et son historique restent intacts).
+    space_id: Mapped[int | None] = mapped_column(
+        ForeignKey("spaces.id", ondelete="SET NULL"), index=True
+    )
 
 
 class Client(Base, TimestampMixin):
