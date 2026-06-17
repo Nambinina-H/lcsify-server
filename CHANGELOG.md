@@ -62,3 +62,7 @@
 ## 2026-06-16
 **Added**
 - Projets : champ dérivé **`is_current`** dans `GET /api/admin/projects` — marque **LE** projet sur lequel chaque collaborateur travaille en dernier (focus actuel, d'après son **segment d'activité le plus récent**). Distingue « En cours » (un seul à la fois) des autres projets assignés qui passent « En attente ». Calculé à la lecture (**aucune migration, rétroactif**) ; jamais vrai pour un projet terminé
+
+## 2026-06-17
+**Fixed**
+- **Garde-fou anti-doublons à l'ingestion** : un segment **quasi-identique** à un segment déjà enregistré pour le même collaborateur (même app/fenêtre/état **et** mêmes bornes début+fin à ~1 s près) est désormais **écarté**. Corrige le **temps gonflé** quand deux agents tournaient en parallèle sur un même poste (capture en double, horodatages décalés de quelques µs que la contrainte d'unicité ne voyait pas). Sans risque pour les segments consécutifs (l'agent ouvre un nouveau segment à chaque changement d'app/fenêtre/état). N'affecte **que les nouvelles ingestions** (l'historique n'est pas modifié)

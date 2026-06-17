@@ -14,6 +14,10 @@ logger = get_logger()
 # En-deca de ce seuil, c'est la latence reseau normale : on ne touche a rien.
 _CLOCK_SKEW_THRESHOLD_SEC = 30
 
+# Tolerance pour ecarter un segment "quasi-identique" a un segment deja
+# enregistre (doublon de capture parallele : deux agents lances en meme temps).
+_DUP_TOLERANCE = timedelta(seconds=1)
+
 
 def _insert_stmt():
     """INSERT ... ON CONFLICT DO NOTHING selon le dialecte (ignore les doublons)."""
@@ -91,6 +95,79 @@ def _lookup_project(session, client_cache, project_cache, client_name, video, ve
     return project_cache[key]
 
 
+def _filter_near_duplicates(session, rows):
+    """Ecarte les segments quasi-identiques a un segment deja enregistre pour le
+    meme collaborateur.
+
+    Doublon = meme (employe, app, fenetre, etat) ET memes bornes (debut ET fin)
+    a `_DUP_TOLERANCE` pres. Cible les doublons de capture parallele (deux agents
+    simultanes reagissent aux memes changements de fenetre -> bornes identiques
+    au µs). Sans risque pour les segments consecutifs : l'agent ouvre un nouveau
+    segment a chaque changement de cle (app/fenetre/etat), donc deux segments qui
+    se suivent different toujours d'au moins un de ces champs.
+
+    Renvoie (rows_a_inserer, nb_ecartes). Les rows sans bornes connues sont
+    conservees telles quelles (rien a comparer).
+    """
+    comparable = [
+        r for r in rows
+        if r["started_at"] is not None and r["ended_at"] is not None
+    ]
+    if not comparable:
+        return rows, 0
+
+    emp_ids = {r["employee_id"] for r in comparable}
+    lo = min(r["started_at"] for r in comparable) - _DUP_TOLERANCE
+    hi = max(r["started_at"] for r in comparable) + _DUP_TOLERANCE
+
+    existing = session.execute(
+        select(
+            Segment.employee_id,
+            Segment.app,
+            Segment.window_title,
+            Segment.state,
+            Segment.started_at,
+            Segment.ended_at,
+        ).where(
+            Segment.employee_id.in_(emp_ids),
+            Segment.started_at >= lo,
+            Segment.started_at <= hi,
+        )
+    ).all()
+
+    # (employe, app, fenetre, etat) -> liste de (started_at, ended_at)
+    index = {}
+    for emp, app, title, state, s, e in existing:
+        if s is None or e is None:
+            continue
+        index.setdefault((emp, app, title, state), []).append((s, e))
+
+    tol = _DUP_TOLERANCE.total_seconds()
+
+    def _is_dup(row):
+        key = (row["employee_id"], row["app"], row["window_title"], row["state"])
+        s, e = row["started_at"], row["ended_at"]
+        for es, ee in index.get(key, ()):  # listes courtes (meme cle, proche)
+            if (abs((es - s).total_seconds()) <= tol
+                    and abs((ee - e).total_seconds()) <= tol):
+                return True
+        return False
+
+    kept, skipped = [], 0
+    for r in rows:
+        if r["started_at"] is None or r["ended_at"] is None:
+            kept.append(r)
+            continue
+        if _is_dup(r):
+            skipped += 1
+            continue
+        kept.append(r)
+        # Ajoute a l'index : ecarte aussi un doublon present dans le meme lot.
+        key = (r["employee_id"], r["app"], r["window_title"], r["state"])
+        index.setdefault(key, []).append((r["started_at"], r["ended_at"]))
+    return kept, skipped
+
+
 def insert_segments(events, client_sent_at=None):
     """Insere les segments en resolvant noms -> cles etrangeres (get-or-create).
 
@@ -149,6 +226,15 @@ def insert_segments(events, client_sent_at=None):
                 "clicks": e.clicks or 0,
                 "received_at": now,
             })
+
+        # Garde-fou anti-doublons de capture parallele (deux agents simultanes).
+        rows, skipped = _filter_near_duplicates(session, rows)
+        if skipped:
+            logger.warning(
+                "Ingestion : %s segment(s) quasi-doublon(s) ecarte(s).", skipped
+            )
+        if not rows:
+            return 0
 
         stmt = _insert_stmt()(Segment).values(rows).on_conflict_do_nothing()
         result = session.execute(stmt)
