@@ -1,9 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 
-from app.report import report_service
+from app.report import export_service, report_service
 from app.security.security import get_current_user
 
 router = APIRouter()
+
+_XLSX_MIME = (
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
 
 
 @router.get("/api/summary")
@@ -74,6 +78,23 @@ def calendar(
     space_id: int | None = None,
 ):
     return report_service.calendar(days, date_from, date_to, employee_id, space_id)
+
+
+@router.get("/api/calendar/export")
+def calendar_export(
+    year: int,
+    month: int,
+    _=Depends(get_current_user),
+    space_id: int | None = None,
+):
+    """Export Excel (.xlsx) du calendrier : grille hebdo du mois, par espace."""
+    data = export_service.build_calendar_xlsx(year, month, space_id)
+    fname = f"calendrier-{year}-{month:02d}.xlsx"
+    return Response(
+        content=data,
+        media_type=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @router.get("/api/day-activity")

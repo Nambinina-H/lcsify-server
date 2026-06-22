@@ -11,6 +11,9 @@ psycopg2-binary==2.9.12
 PyJWT==2.10.1
 bcrypt==4.3.0
 
+# Export Excel (.xlsx) du calendrier
+openpyxl==3.1.5
+
 # Outils de developpement (qualite)
 ruff==0.15.15
 pre-commit==4.2.0
