@@ -27,11 +27,11 @@ _DEFAULT_START = 9                   # plage par defaut si aucune activite
 
 # Teintes proches du PDF (hex sans '#').
 _FILL = {
-    "V1": "DCE9FB",      # bleu clair
-    "V2": "FCE5D6",      # orange clair
-    "V3": "E6DCF2",      # violet clair
-    "AUTRES": "EAEAEA",  # gris
-    "OVER": "F6C6C2",    # rouge clair (depassement)
+    "V1": "8E7CC3",      # violet
+    "V2": "6FA8DC",      # bleu
+    "V3": "EAD1DC",      # rose clair
+    "AUTRES": "ECECEC",  # gris tres clair (quasi blanc)
+    "OVER": "FF0000",    # rouge vif (depassement)
 }
 _DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven"]
 _MONTHS = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet",
@@ -131,6 +131,7 @@ def build_calendar_xlsx(year, month, space_id=None):
     ws.title = (_MONTHS[month] or "Export")[:31]
 
     thin = Side(style="thin", color="D0D5DB")
+    thick = Side(style="medium", color=_NAVY)  # separateur entre agents
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
     center = Alignment(horizontal="center", vertical="center", wrap_text=True)
     left = Alignment(horizontal="left", vertical="top", wrap_text=True)
@@ -139,7 +140,14 @@ def build_calendar_xlsx(year, month, space_id=None):
     agent_fill = PatternFill("solid", fgColor="F1F4F7")
     out_fill = PatternFill("solid", fgColor="F7F8FA")  # jour hors mois
 
-    last_col = 2 + 5 * len(blocks)
+    GAP = 1  # colonne vide etroite entre deux semaines
+    n_weeks = len(blocks)
+
+    def _wcol(k):  # colonne du 1er jour de la semaine k (0-indexee)
+        return 3 + k * (5 + GAP)
+
+    day_cols = [c for k in range(n_weeks) for c in range(_wcol(k), _wcol(k) + 5)]
+    last_col = (_wcol(n_weeks - 1) + 4) if n_weeks else 2
     espace = f" — Espace {space.name}" if space else " — Tous"
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last_col)
     t = ws.cell(1, 1, f"Suivi du temps — {_MONTHS[month]} {year}{espace}")
@@ -149,19 +157,20 @@ def build_calendar_xlsx(year, month, space_id=None):
     for col, label in ((1, "Agent"), (2, "Heure")):
         c = ws.cell(ROW_DAY, col, label)
         c.font = head_font; c.fill = head_fill; c.alignment = center; c.border = border
-    col = 3
-    for iw, days in blocks:
-        ws.merge_cells(start_row=ROW_WEEK, start_column=col, end_row=ROW_WEEK,
-                       end_column=col + 4)
-        wc = ws.cell(ROW_WEEK, col, f"Semaine {iw}")
+    for wi, (_iw, days) in enumerate(blocks, start=1):
+        cstart = _wcol(wi - 1)
+        ws.merge_cells(start_row=ROW_WEEK, start_column=cstart, end_row=ROW_WEEK,
+                       end_column=cstart + 4)
+        wc = ws.cell(ROW_WEEK, cstart, f"Semaine {wi}")
         wc.font = head_font; wc.fill = head_fill; wc.alignment = center
         for i, (dd, in_month) in enumerate(days):
-            hc = ws.cell(ROW_DAY, col + i, f"{_DAYS[i]} {dd.day:02d}" if in_month else "")
+            hc = ws.cell(ROW_DAY, cstart + i,
+                         f"{_DAYS[i]} {dd.day:02d}" if in_month else "")
             hc.font = head_font; hc.fill = head_fill; hc.alignment = center
             hc.border = border
-        col += 5
 
     row = ROW_DAY + 1
+    last_block_end = ROW_DAY
     for emp in employees:
         hours = [h for (eid, _d, h) in cells if eid == emp["id"]]
         start = min(hours) if hours else _DEFAULT_START
@@ -181,10 +190,10 @@ def build_calendar_xlsx(year, month, space_id=None):
             hcell = ws.cell(r, 2, f"{hour:02d}h")
             hcell.alignment = center; hcell.border = border
             hcell.font = Font(size=9, color="6C7884")
-            col = 3
-            for iw, days in blocks:
+            for k, (_iw, days) in enumerate(blocks):
+                cstart = _wcol(k)
                 for i, (dd, in_month) in enumerate(days):
-                    cc = ws.cell(r, col + i)
+                    cc = ws.cell(r, cstart + i)
                     cc.alignment = left; cc.border = border
                     if not in_month:
                         cc.fill = out_fill
@@ -199,10 +208,9 @@ def build_calendar_xlsx(year, month, space_id=None):
                              else _FILL.get((dom["version"] or "").upper(),
                                             _FILL["AUTRES"]))
                     cc.fill = PatternFill("solid", fgColor=color)
-                col += 5
 
         # Fusion verticale des heures consecutives identiques (par colonne jour).
-        for c_idx in range(3, last_col + 1):
+        for c_idx in day_cols:
             rr = block_start
             while rr <= block_end:
                 val = ws.cell(rr, c_idx).value
@@ -216,23 +224,43 @@ def build_calendar_xlsx(year, month, space_id=None):
                     rr = rr2 + 1
                 else:
                     rr += 1
+
+        # Ligne EPAISSE au-dessus du bloc -> separation nette entre agents.
+        top_sep = Border(top=thick, bottom=thin, left=thin, right=thin)
+        for c_idx in (1, 2, *day_cols):
+            ws.cell(block_start, c_idx).border = top_sep
+        last_block_end = block_end
         row = block_end + 1
+
+    # Ligne epaisse de fermeture sous le dernier agent.
+    if employees:
+        for c_idx in (1, 2, *day_cols):
+            cur = ws.cell(last_block_end, c_idx)
+            keep_top = cur.border.top if cur.border else thin
+            cur.border = Border(bottom=thick, top=keep_top, left=thin, right=thin)
 
     ws.column_dimensions["A"].width = 16
     ws.column_dimensions["B"].width = 6
+    day_set = set(day_cols)
     for ci in range(3, last_col + 1):
-        ws.column_dimensions[get_column_letter(ci)].width = 22
+        ws.column_dimensions[get_column_letter(ci)].width = (
+            22 if ci in day_set else 2.5)  # gap = colonne etroite
 
-    # Legende
+    # Legende (verticale) : libelle (col A) + pastille couleur (col B), par ligne.
     leg = row + 1
-    ws.cell(leg, 1, "Légende :").font = Font(bold=True, size=9)
+    ws.merge_cells(start_row=leg, start_column=1, end_row=leg, end_column=2)
+    lt = ws.cell(leg, 1, "Légende")
+    lt.font = Font(bold=True, size=9, color=_NAVY)
+    lt.alignment = center
     for i, (lab, key) in enumerate(
         [("V1", "V1"), ("V2", "V2"), ("V3", "V3"),
-         ("Autres", "AUTRES"), ("Dépassement", "OVER")]
+         ("Autres", "AUTRES"), ("Dépassement timer", "OVER")]
     ):
-        lc = ws.cell(leg, 2 + i, lab)
-        lc.fill = PatternFill("solid", fgColor=_FILL[key])
-        lc.alignment = center; lc.border = border
+        r = leg + 1 + i
+        lc = ws.cell(r, 1, lab)
+        lc.font = Font(size=9); lc.border = border; lc.alignment = center
+        sw = ws.cell(r, 2)
+        sw.fill = PatternFill("solid", fgColor=_FILL[key]); sw.border = border
 
     ws.freeze_panes = "C4"
     buf = BytesIO()
