@@ -80,3 +80,7 @@
 **Added**
 - **Export Excel du calendrier** : `GET /api/calendar/export?year&month&space_id` (manager) renvoie un **`.xlsx`** — grille hebdo type Clockify pour le mois : un bloc **par agent** (lignes = sa plage horaire perso détectée, début d'activité → +9h, en **heure locale UTC+3**), colonnes **Lun→Ven regroupées par semaine** ; chaque case liste **tous les projets** capturés cette heure-là, **couleur = version dominante** (V1/V2/V3/Autres) + **rouge si dépassement**, fusion des heures consécutives identiques. Statuts manuels (congé/attente…) non gérés → cases vides. Dépendance : `openpyxl`
 - Export calendrier — **mise en forme** : semaines numérotées **« Semaine 1, 2… »** (relatif au mois), **colonne vide** entre les semaines, **séparateur épais** entre agents, palette **V1 violet / V2 bleu / V3 rose / Autres gris clair / Dépassement rouge**, **légende verticale** avec titre centré
+
+## 2026-06-24
+**Added**
+- **Garde-fou anti-suppression de projet** : `DELETE /api/admin/projects/{id}` refuse désormais (**409**) la suppression d'un projet **en cours qui a un temps prévu** — il faut d'abord le marquer **« terminé »** (sinon le temps déjà enregistré serait détaché → « Sans projet »). Exceptions : un projet **terminé** ou **« Non estimé »** (sans temps prévu) reste supprimable directement

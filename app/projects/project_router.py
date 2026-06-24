@@ -108,7 +108,20 @@ def set_project_status(
 @router.delete("/api/admin/projects/{project_id}")
 def delete_project(project_id: int, user=Depends(require_scope("projects", "manage"))):
     project = project_service.get_project(project_id)
-    if project is None or not project_service.delete_project(project_id):
+    if project is None:
+        raise HTTPException(status_code=404, detail="Projet introuvable")
+    # Garde-fou : on ne supprime pas un projet EN COURS qui a un temps prevu
+    # (sa suppression detacherait le temps enregistre -> « Sans projet »). Il
+    # faut d'abord le marquer « termine ». Exception : un projet « Non estime »
+    # (sans temps prevu) reste supprimable directement.
+    if project.get("status") != "termine" and (
+        project.get("estimated_duration_sec") or 0
+    ) > 0:
+        raise HTTPException(
+            status_code=409,
+            detail="Projet en cours : marquez-le « Terminé » avant de le supprimer.",
+        )
+    if not project_service.delete_project(project_id):
         raise HTTPException(status_code=404, detail="Projet introuvable")
     audit_service.log_event(
         user, "project.delete", f"Projet « {_label(project)} » supprimé"
