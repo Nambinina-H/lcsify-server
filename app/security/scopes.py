@@ -13,11 +13,11 @@ from app.security.security import get_current_user
 # Domaines accordables. Certains sont lecture seule, d'autres ecriture seule.
 DOMAINS = (
     "dashboard", "history", "users", "settings",
-    "projects", "clients", "collaborators",
+    "projects", "clients", "collaborators", "leaves",
 )
 _VIEW_ONLY = ("dashboard", "history")        # seulement :view (la page se voit)
 # seulement :manage (ex. suppression, ou edition du role des collaborateurs)
-_MANAGE_ONLY = ("projects", "clients", "collaborators")
+_MANAGE_ONLY = ("projects", "clients", "collaborators", "leaves")
 
 
 def _allowed():

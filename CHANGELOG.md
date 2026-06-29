@@ -84,3 +84,7 @@
 ## 2026-06-24
 **Added**
 - **Garde-fou anti-suppression de projet** : `DELETE /api/admin/projects/{id}` refuse désormais (**409**) la suppression d'un projet **en cours qui a un temps prévu** — il faut d'abord le marquer **« terminé »** (sinon le temps déjà enregistré serait détaché → « Sans projet »). Exceptions : un projet **terminé** ou **« Non estimé »** (sans temps prévu) reste supprimable directement
+
+## 2026-06-29
+**Added**
+- **Gestion des congés** : nouvelles tables `hr_collaborateurs` (registre RH) et `leaves` (migrations `c9d0e1f2a3b4` et `d0e1f2a3b4c5`, **additives**) + colonne `employees.hr_collaborateur_id` (lien collaborateur ↔ fiche RH). Domaine `leaves` : `GET/POST/PUT/DELETE /api/admin/hr-collaborateurs` (+ import du fichier RH `.xlsx`/`.csv` via `POST .../import`), `GET/POST/PUT/DELETE /api/admin/leaves`, `PATCH /api/admin/leaves/{id}/status` (validation : en attente → approuvé/refusé, avec traçabilité du décideur `decided_by`/`decided_at`), et `PATCH /api/admin/employees/{id}/hr-link`. **Solde calculé à la lecture** : solde initial + 2,5 j par fin de mois écoulée depuis la date de référence − congés payés approuvés ; décompte en **jours calendaires** (week-ends inclus). Nouveau scope **`leaves:manage`**. `GET /api/admin/employees` renvoie aussi `hr_collaborateur_id`/`hr_matricule`. Dépendance ajoutée : **`python-multipart`** (upload). Rétro-compatible : sans le scope l'accès est refusé ; l'ingestion et le contrat agent sont inchangés

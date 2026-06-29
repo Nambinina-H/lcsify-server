@@ -1,8 +1,10 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -73,6 +75,12 @@ class Employee(Base, TimestampMixin):
     # est supprime (le collaborateur et son historique restent intacts).
     space_id: Mapped[int | None] = mapped_column(
         ForeignKey("spaces.id", ondelete="SET NULL"), index=True
+    )
+    # Fiche RH reliee (registre des conges). NULL = non relie. SET NULL si la
+    # fiche est supprimee. C'est ce lien qui rattache un collaborateur (agent) a
+    # son solde de conges et a ses demandes.
+    hr_collaborateur_id: Mapped[int | None] = mapped_column(
+        ForeignKey("hr_collaborateurs.id", ondelete="SET NULL"), index=True
     )
 
 
@@ -172,6 +180,62 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
     value: Mapped[str | None] = mapped_column(Text)
+
+
+class HrCollaborateur(Base, TimestampMixin):
+    """Fiche RH (registre des conges), importee du fichier du RH. Cle = matricule.
+
+    Le solde de conges est calcule a la lecture :
+        solde_initial + 2,5 j par fin de mois ecoulee depuis date_solde
+        - conges payes approuves.
+    Un collaborateur (agent) peut etre relie a une fiche via
+    Employee.hr_collaborateur_id (les noms agent/RH ne correspondent pas : le
+    rapprochement est fait manuellement par le RH)."""
+
+    __tablename__ = "hr_collaborateurs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    matricule: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    nom: Mapped[str | None] = mapped_column(String(255))
+    prenom: Mapped[str | None] = mapped_column(String(255))
+    # Solde de reference (jours) tel que fourni dans le fichier RH.
+    solde_initial: Mapped[float] = mapped_column(
+        Float, nullable=False, server_default="0"
+    )
+    # Date de reference du solde : le +2,5 j/mois part de la.
+    date_solde: Mapped[date | None] = mapped_column(Date)
+    poste: Mapped[str | None] = mapped_column(String(255))
+    service: Mapped[str | None] = mapped_column(String(255))
+
+
+class Leave(Base, TimestampMixin):
+    """Conge / absence d'un collaborateur (relie a une fiche RH par hr_id).
+
+    nb_jours = jours CALENDAIRES (week-ends compris : les contrats sont payes
+    tous les jours du mois). Seul le conge paye (type='conge_paye') decompte le
+    solde. statut : 'approuve' (saisie RH directe, Phase 1) ; le champ est pret
+    pour la validation des demandes (Phase 2 : 'en_attente' -> 'approuve'/'refuse')."""
+
+    __tablename__ = "leaves"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    hr_id: Mapped[int] = mapped_column(
+        ForeignKey("hr_collaborateurs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    type: Mapped[str] = mapped_column(String(40), nullable=False)
+    date_debut: Mapped[date] = mapped_column(Date, nullable=False)
+    date_fin: Mapped[date] = mapped_column(Date, nullable=False)
+    nb_jours: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    motif: Mapped[str | None] = mapped_column(Text)
+    statut: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="approuve"
+    )
+    created_by: Mapped[str | None] = mapped_column(String(255))  # nom (snapshot)
+    # Qui a change le statut en dernier (validation / refus) + quand.
+    decided_by: Mapped[str | None] = mapped_column(String(255))  # nom (snapshot)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class AuditLog(Base):

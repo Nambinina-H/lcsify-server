@@ -5,7 +5,13 @@ from sqlalchemy import update as sa_update
 
 from app.common.enums import StateEnum
 from app.database.database_session import SessionLocal
-from app.database.models import Client, Employee, Project, Segment
+from app.database.models import (
+    Client,
+    Employee,
+    HrCollaborateur,
+    Project,
+    Segment,
+)
 
 _ACTIVE = StateEnum.ACTIVE.value
 
@@ -354,11 +360,16 @@ def register_employee(external_id, name, previous_id=None):
 
 
 def list_employees():
-    """Monteurs connus (registre employees), nom courant."""
+    """Monteurs connus (registre employees), nom courant + fiche RH reliee."""
     with SessionLocal() as session:
         rows = session.execute(
             select(
-                Employee.external_id, Employee.name, Employee.role, Employee.space_id
+                Employee.external_id, Employee.name, Employee.role, Employee.space_id,
+                Employee.hr_collaborateur_id, HrCollaborateur.matricule,
+            )
+            .outerjoin(
+                HrCollaborateur,
+                Employee.hr_collaborateur_id == HrCollaborateur.id,
             )
             .where(Employee.is_active.is_(True))
             .order_by(Employee.name)
@@ -369,6 +380,8 @@ def list_employees():
             "employee_name": r.name or r.external_id,
             "role": r.role,
             "space_id": r.space_id,
+            "hr_collaborateur_id": r.hr_collaborateur_id,
+            "hr_matricule": r.matricule,
         }
         for r in rows
     ]
