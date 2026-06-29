@@ -33,6 +33,7 @@ class LeaveIn(BaseModel):
     date_fin: date
     nb_jours: float | None = None
     motif: str | None = None
+    validateur: str | None = None  # validateur designe (affiche dans le tableau)
 
 
 class LeaveStatusIn(BaseModel):

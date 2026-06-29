@@ -202,6 +202,7 @@ def _leave_dict(lv: Leave, hr: HrCollaborateur | None):
         "nb_jours": round(lv.nb_jours or 0.0, 2),
         "motif": lv.motif,
         "statut": lv.statut,
+        "validateur": lv.validateur,
         "created_by": lv.created_by,
         "created_at": lv.created_at.isoformat() if lv.created_at else None,
         "decided_by": lv.decided_by,
@@ -234,6 +235,7 @@ def create_leave(data, created_by=None):
             date_fin=data["date_fin"],
             nb_jours=data.get("nb_jours") or 0.0,
             motif=data.get("motif"),
+            validateur=data.get("validateur"),
             statut="en_attente",  # validation faite ensuite depuis le tableau
             created_by=created_by,
         )
@@ -257,6 +259,7 @@ def update_leave(leave_id, data):
         lv.date_fin = data["date_fin"]
         lv.nb_jours = data.get("nb_jours") or 0.0
         lv.motif = data.get("motif")
+        lv.validateur = data.get("validateur")
         # Le statut n'est pas modifie ici : il se gere via set_leave_status.
         session.commit()
         session.refresh(lv)

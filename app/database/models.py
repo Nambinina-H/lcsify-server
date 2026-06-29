@@ -233,7 +233,11 @@ class Leave(Base, TimestampMixin):
         String(20), nullable=False, server_default="approuve"
     )
     created_by: Mapped[str | None] = mapped_column(String(255))  # nom (snapshot)
-    # Qui a change le statut en dernier (validation / refus) + quand.
+    # Validateur DÉSIGNÉ à la création (saisi dans le formulaire) : affiché dans
+    # le tableau. Distinct de decided_by (qui a réellement validé -> historique).
+    validateur: Mapped[str | None] = mapped_column(String(255))
+    # Qui a change le statut en dernier (validation / refus) + quand. Affiché
+    # uniquement dans l'historique (audit), pas dans le tableau des congés.
     decided_by: Mapped[str | None] = mapped_column(String(255))  # nom (snapshot)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime)
 
