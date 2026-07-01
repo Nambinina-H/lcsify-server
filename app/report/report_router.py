@@ -88,10 +88,12 @@ def calendar_export(
     date_to: str,
     _=Depends(get_current_user),
     employee_ids: str = "",
+    format: str = "grid",
 ):
-    """Export Excel (.xlsx) du calendrier : grille hebdo sur la plage
-    [date_from, date_to], pour les collaborateurs sélectionnés (external_id
-    séparés par des virgules ; vide = tous)."""
+    """Export Excel (.xlsx) sur la plage [date_from, date_to] pour les
+    collaborateurs sélectionnés (external_id séparés par des virgules ; vide =
+    tous). `format` : « grid » (grille horaire) ou « recap » (prévu/actuel/restant
+    par collaborateur)."""
     try:
         df = date.fromisoformat(date_from)
         dt = date.fromisoformat(date_to)
@@ -100,8 +102,12 @@ def calendar_export(
     if dt < df:
         raise HTTPException(status_code=422, detail="La date de fin précède la date de début")
     ids = [x.strip() for x in employee_ids.split(",") if x.strip()] or None
-    data = export_service.build_calendar_xlsx(df, dt, ids)
-    fname = f"calendrier-{date_from}_{date_to}.xlsx"
+    if format == "recap":
+        data = export_service.build_recap_xlsx(df, dt, ids)
+        fname = f"recap-{date_from}_{date_to}.xlsx"
+    else:
+        data = export_service.build_calendar_xlsx(df, dt, ids)
+        fname = f"calendrier-{date_from}_{date_to}.xlsx"
     return Response(
         content=data,
         media_type=_XLSX_MIME,

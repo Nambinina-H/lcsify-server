@@ -17,11 +17,11 @@ from openpyxl import Workbook
 from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 
 from app.common.enums import StateEnum
 from app.database.database_session import SessionLocal
-from app.database.models import Employee, Project, Segment
+from app.database.models import Client, Employee, Project, Segment
 
 _ACTIVE = StateEnum.ACTIVE.value
 _IDLE = StateEnum.IDLE.value
@@ -330,6 +330,136 @@ def build_calendar_xlsx(date_from, date_to, external_ids=None):
         sw.fill = PatternFill("solid", fgColor=_FILL[key]); sw.border = border
 
     ws.freeze_panes = "C4"
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _spent_by_project():
+    """project_id -> temps actif cumulé (toutes périodes) = « Temps actuel » de la
+    page Projets (même calcul que projects._spent_lookup)."""
+    with SessionLocal() as s:
+        rows = s.execute(
+            select(
+                Segment.project_id,
+                func.sum(
+                    case((Segment.state == _ACTIVE, Segment.duration_sec), else_=0)
+                ),
+            )
+            .where(Segment.project_id.is_not(None))
+            .group_by(Segment.project_id)
+        ).all()
+    return {r[0]: (r[1] or 0) for r in rows}
+
+
+def build_recap_xlsx(date_from, date_to, external_ids=None):
+    """Récap par collaborateur : ses projets travaillés sur la plage, avec
+    Temps prévu / Temps actuel (cumul actif, comme la page Projets) / Temps
+    restant (= prévu − actuel ; négatif = dépassé)."""
+    lo = datetime(date_from.year, date_from.month, date_from.day) - _LOCAL_OFFSET
+    hi = (datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59)
+          - _LOCAL_OFFSET)
+    spent = _spent_by_project()
+    with SessionLocal() as s:
+        emp_q = select(Employee.id, Employee.external_id, Employee.name).where(
+            Employee.is_active.is_(True))
+        if external_ids:
+            emp_q = emp_q.where(Employee.external_id.in_(external_ids))
+        emp_rows = s.execute(emp_q.order_by(Employee.name)).all()
+        emp_ids = [r.id for r in emp_rows]
+
+        # (collaborateur, projet) travaillés sur la plage (actif + idle).
+        pair_q = (
+            select(
+                Segment.employee_id, Segment.project_id,
+                Project.video_name, Project.version,
+                Project.estimated_duration_sec, Client.name.label("client"),
+            )
+            .join(Project, Segment.project_id == Project.id)
+            .join(Client, Project.client_id == Client.id, isouter=True)
+            .where(Segment.state.in_((_ACTIVE, _IDLE)),
+                   Segment.started_at >= lo, Segment.started_at <= hi,
+                   Segment.project_id.is_not(None))
+        )
+        if emp_ids:
+            pair_q = pair_q.where(Segment.employee_id.in_(emp_ids))
+        worked = {}  # emp_id -> {project_id: {video, version, client, est}}
+        for r in s.execute(pair_q).all():
+            byp = worked.setdefault(r.employee_id, {})
+            byp.setdefault(r.project_id, {
+                "video": r.video_name, "version": r.version,
+                "client": r.client or "", "est": r.estimated_duration_sec or 0,
+            })
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Récap"
+
+    thin = Side(style="thin", color="D0D5DB")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    head_fill = PatternFill("solid", fgColor=_NAVY)
+    head_font = Font(color="FFFFFF", bold=True, size=10)
+    name_fill = PatternFill("solid", fgColor="F1F4F7")
+    red = Font(size=10, bold=True, color="DC2626")
+    green = Font(size=10, bold=True, color="059669")
+
+    headers = ["Collaborateur", "Projet", "Version", "Client",
+               "Temps prévu", "Temps actuel", "Temps restant"]
+    last_col = len(headers)
+
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last_col)
+    periode = f"du {date_from.strftime('%d/%m/%Y')} au {date_to.strftime('%d/%m/%Y')}"
+    t = ws.cell(1, 1, f"Récap prévu / actuel / restant — {periode}")
+    t.font = Font(bold=True, size=13, color=_NAVY)
+
+    for col, h in enumerate(headers, start=1):
+        c = ws.cell(3, col, h)
+        c.font = head_font; c.fill = head_fill
+        c.alignment = center; c.border = border
+
+    row = 4
+    for er in emp_rows:
+        projs = worked.get(er.id)
+        if not projs:
+            continue
+        start = row
+        for pid, info in sorted(
+            projs.items(), key=lambda kv: (kv[1]["video"] or "").lower()
+        ):
+            est = info["est"]
+            sp = spent.get(pid, 0)
+            ws.cell(row, 2, info["video"]).alignment = left
+            ws.cell(row, 3, info["version"]).alignment = center
+            ws.cell(row, 4, info["client"]).alignment = left
+            ws.cell(row, 5, _fmt_dur(est) if est else "-").alignment = center
+            ws.cell(row, 6, _fmt_dur(sp)).alignment = center
+            rc = ws.cell(row, 7)
+            rc.alignment = center
+            if est:
+                rem = est - sp
+                rc.value = f"-{_fmt_dur(-rem)}" if rem < 0 else _fmt_dur(rem)
+                rc.font = red if rem < 0 else green
+            else:
+                rc.value = "-"
+            for col in range(2, last_col + 1):
+                ws.cell(row, col).border = border
+            row += 1
+        # Nom du collaborateur fusionné sur ses lignes.
+        ws.merge_cells(start_row=start, start_column=1, end_row=row - 1, end_column=1)
+        nc = ws.cell(start, 1, er.name or er.external_id)
+        nc.font = Font(bold=True, size=10, color=_NAVY)
+        nc.fill = name_fill
+        nc.alignment = center
+        for rr in range(start, row):
+            ws.cell(rr, 1).border = border
+
+    widths = [18, 32, 7, 20, 12, 12, 13]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    ws.freeze_panes = "A4"
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()
