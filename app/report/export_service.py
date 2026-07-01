@@ -372,14 +372,15 @@ def build_recap_xlsx(date_from, date_to, external_ids=None):
             select(
                 Project.assigned_employee_id, Project.id,
                 Project.video_name, Project.version,
-                Project.estimated_duration_sec, Client.name.label("client"),
+                Project.estimated_duration_sec, Project.status,
+                Client.name.label("client"),
             )
             .join(Client, Project.client_id == Client.id, isouter=True)
             .where(Project.assigned_employee_id.is_not(None))
         )
         if emp_ids:
             proj_q = proj_q.where(Project.assigned_employee_id.in_(emp_ids))
-        by_emp = {}  # emp_id -> [ {pid, video, version, client, est}, ... ]
+        by_emp = {}  # emp_id -> [ {pid, video, version, client, est, status}, ... ]
         for r in s.execute(proj_q).all():
             by_emp.setdefault(r.assigned_employee_id, []).append({
                 "pid": r.id,
@@ -387,6 +388,7 @@ def build_recap_xlsx(date_from, date_to, external_ids=None):
                 "version": r.version or "",
                 "client": r.client or "",
                 "est": r.estimated_duration_sec or 0,
+                "status": r.status,
             })
 
     wb = Workbook()
@@ -394,6 +396,7 @@ def build_recap_xlsx(date_from, date_to, external_ids=None):
     ws.title = "Récap"
 
     thin = Side(style="thin", color="D0D5DB")
+    thick = Side(style="medium", color=_NAVY)  # séparateur entre collaborateurs
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
     center = Alignment(horizontal="center", vertical="center", wrap_text=True)
     left = Alignment(horizontal="left", vertical="center", wrap_text=True)
@@ -432,7 +435,11 @@ def build_recap_xlsx(date_from, date_to, external_ids=None):
             ws.cell(row, 5, _fmt_dur(est) if est else "-").alignment = center
             rc = ws.cell(row, 6)
             rc.alignment = center
-            if est:
+            if info["status"] != "termine" and sp == 0:  # jamais démarré
+                rc.value = (f"{_fmt_dur(est)} (Non démarré)" if est
+                            else "(Non démarré)")
+                rc.font = green
+            elif est:
                 rem = est - sp
                 rc.value = f"-{_fmt_dur(-rem)}" if rem < 0 else _fmt_dur(rem)
                 rc.font = red if rem < 0 else green
@@ -449,6 +456,11 @@ def build_recap_xlsx(date_from, date_to, external_ids=None):
         nc.alignment = center
         for rr in range(start, row):
             ws.cell(rr, 1).border = border
+        # Ligne épaisse sous le bloc -> sépare nettement les collaborateurs.
+        for col in range(1, last_col + 1):
+            b = ws.cell(row - 1, col).border
+            ws.cell(row - 1, col).border = Border(
+                left=b.left, right=b.right, top=b.top, bottom=thick)
 
     widths = [18, 32, 7, 20, 12, 13]
     for i, w in enumerate(widths, start=1):

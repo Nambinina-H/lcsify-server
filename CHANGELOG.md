@@ -94,7 +94,7 @@
 
 ## 2026-07-01
 **Added**
-- Export calendrier — **format « Récap »** : `GET /api/calendar/export?…&format=recap` (manager) renvoie un `.xlsx` **par collaborateur** listant **tous ses projets assignés** (exactement comme la page Projets, démarrés ou non), avec **Temps prévu** et **Temps restant** (= prévu − temps actif cumulé ; rouge si dépassé, « - » si non estimé). Cumulé (les dates ne filtrent pas le récap). Nouveau paramètre **`format=grid|recap`** (défaut `grid` ; la grille horaire reste inchangée)
+- Export calendrier — **format « Récap »** : `GET /api/calendar/export?…&format=recap` (manager) renvoie un `.xlsx` **par collaborateur** listant **tous ses projets assignés** (exactement comme la page Projets, démarrés ou non), avec **Temps prévu** et **Temps restant** (= prévu − temps actif cumulé ; rouge si dépassé, « - » si non estimé). Cumulé (les dates ne filtrent pas le récap). Les projets **non démarrés** (non terminés, 0 temps) sont marqués « … (Non démarré) » dans le temps restant ; **séparateur épais** entre chaque collaborateur. Nouveau paramètre **`format=grid|recap`** (défaut `grid` ; la grille horaire reste inchangée)
 
 **Updated**
 - Export Excel du calendrier : l'endpoint passe de `year&month&space_id` à **`GET /api/calendar/export?date_from&date_to&employee_ids`** (manager) — export sur une **plage de dates libre** et pour une **liste de collaborateurs** choisis (external_id séparés par des virgules ; vide = tous). Dates invalides ou fin < début → **422**
