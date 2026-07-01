@@ -368,18 +368,19 @@ def build_recap_xlsx(date_from, date_to, external_ids=None):
         emp_rows = s.execute(emp_q.order_by(Employee.name)).all()
         emp_ids = [r.id for r in emp_rows]
 
-        # (collaborateur, projet) travaillés sur la plage (actif + idle).
+        # (collaborateur, projet) où il a eu de l'activité ACTIVE sur la plage
+        # (même critère que le calendrier, pour lister exactement pareil).
+        # project_id NULL -> « (non identifié) » : on ne masque rien.
         pair_q = (
             select(
                 Segment.employee_id, Segment.project_id,
                 Project.video_name, Project.version,
                 Project.estimated_duration_sec, Client.name.label("client"),
             )
-            .join(Project, Segment.project_id == Project.id)
+            .join(Project, Segment.project_id == Project.id, isouter=True)
             .join(Client, Project.client_id == Client.id, isouter=True)
-            .where(Segment.state.in_((_ACTIVE, _IDLE)),
-                   Segment.started_at >= lo, Segment.started_at <= hi,
-                   Segment.project_id.is_not(None))
+            .where(Segment.state == _ACTIVE,
+                   Segment.started_at >= lo, Segment.started_at <= hi)
         )
         if emp_ids:
             pair_q = pair_q.where(Segment.employee_id.in_(emp_ids))
@@ -387,8 +388,10 @@ def build_recap_xlsx(date_from, date_to, external_ids=None):
         for r in s.execute(pair_q).all():
             byp = worked.setdefault(r.employee_id, {})
             byp.setdefault(r.project_id, {
-                "video": r.video_name, "version": r.version,
-                "client": r.client or "", "est": r.estimated_duration_sec or 0,
+                "video": r.video_name or "(non identifié)",
+                "version": r.version or "",
+                "client": r.client or "",
+                "est": r.estimated_duration_sec or 0,
             })
 
     wb = Workbook()
@@ -406,7 +409,7 @@ def build_recap_xlsx(date_from, date_to, external_ids=None):
     green = Font(size=10, bold=True, color="059669")
 
     headers = ["Collaborateur", "Projet", "Version", "Client",
-               "Temps prévu", "Temps actuel", "Temps restant"]
+               "Temps prévu", "Temps restant"]
     last_col = len(headers)
 
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last_col)
@@ -426,7 +429,9 @@ def build_recap_xlsx(date_from, date_to, external_ids=None):
             continue
         start = row
         for pid, info in sorted(
-            projs.items(), key=lambda kv: (kv[1]["video"] or "").lower()
+            projs.items(),
+            key=lambda kv: (kv[1]["video"] == "(non identifié)",
+                            (kv[1]["video"] or "").lower()),
         ):
             est = info["est"]
             sp = spent.get(pid, 0)
@@ -434,8 +439,7 @@ def build_recap_xlsx(date_from, date_to, external_ids=None):
             ws.cell(row, 3, info["version"]).alignment = center
             ws.cell(row, 4, info["client"]).alignment = left
             ws.cell(row, 5, _fmt_dur(est) if est else "-").alignment = center
-            ws.cell(row, 6, _fmt_dur(sp)).alignment = center
-            rc = ws.cell(row, 7)
+            rc = ws.cell(row, 6)
             rc.alignment = center
             if est:
                 rem = est - sp
@@ -455,7 +459,7 @@ def build_recap_xlsx(date_from, date_to, external_ids=None):
         for rr in range(start, row):
             ws.cell(rr, 1).border = border
 
-    widths = [18, 32, 7, 20, 12, 12, 13]
+    widths = [18, 32, 7, 20, 12, 13]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
