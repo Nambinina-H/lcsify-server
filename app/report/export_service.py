@@ -353,12 +353,10 @@ def _spent_by_project():
 
 
 def build_recap_xlsx(date_from, date_to, external_ids=None):
-    """Récap par collaborateur : ses projets travaillés sur la plage, avec
-    Temps prévu / Temps actuel (cumul actif, comme la page Projets) / Temps
-    restant (= prévu − actuel ; négatif = dépassé)."""
-    lo = datetime(date_from.year, date_from.month, date_from.day) - _LOCAL_OFFSET
-    hi = (datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59)
-          - _LOCAL_OFFSET)
+    """Récap par collaborateur : TOUS ses projets assignés (comme la page
+    Projets, démarrés ou non), avec Temps prévu et Temps restant (= prévu −
+    temps actif cumulé ; négatif = dépassé, « - » si non estimé).
+    date_from/date_to ne servent pas ici (temps cumulés, tous les projets)."""
     spent = _spent_by_project()
     with SessionLocal() as s:
         emp_q = select(Employee.id, Employee.external_id, Employee.name).where(
@@ -368,27 +366,24 @@ def build_recap_xlsx(date_from, date_to, external_ids=None):
         emp_rows = s.execute(emp_q.order_by(Employee.name)).all()
         emp_ids = [r.id for r in emp_rows]
 
-        # (collaborateur, projet) où il a eu de l'activité ACTIVE sur la plage
-        # (même critère que le calendrier, pour lister exactement pareil).
-        # project_id NULL -> « (non identifié) » : on ne masque rien.
-        pair_q = (
+        # Tous les projets ASSIGNÉS à ces collaborateurs (démarrés ou non),
+        # exactement comme la page Projets (groupée par collaborateur).
+        proj_q = (
             select(
-                Segment.employee_id, Segment.project_id,
+                Project.assigned_employee_id, Project.id,
                 Project.video_name, Project.version,
                 Project.estimated_duration_sec, Client.name.label("client"),
             )
-            .join(Project, Segment.project_id == Project.id, isouter=True)
             .join(Client, Project.client_id == Client.id, isouter=True)
-            .where(Segment.state == _ACTIVE,
-                   Segment.started_at >= lo, Segment.started_at <= hi)
+            .where(Project.assigned_employee_id.is_not(None))
         )
         if emp_ids:
-            pair_q = pair_q.where(Segment.employee_id.in_(emp_ids))
-        worked = {}  # emp_id -> {project_id: {video, version, client, est}}
-        for r in s.execute(pair_q).all():
-            byp = worked.setdefault(r.employee_id, {})
-            byp.setdefault(r.project_id, {
-                "video": r.video_name or "(non identifié)",
+            proj_q = proj_q.where(Project.assigned_employee_id.in_(emp_ids))
+        by_emp = {}  # emp_id -> [ {pid, video, version, client, est}, ... ]
+        for r in s.execute(proj_q).all():
+            by_emp.setdefault(r.assigned_employee_id, []).append({
+                "pid": r.id,
+                "video": r.video_name or "",
                 "version": r.version or "",
                 "client": r.client or "",
                 "est": r.estimated_duration_sec or 0,
@@ -424,17 +419,13 @@ def build_recap_xlsx(date_from, date_to, external_ids=None):
 
     row = 4
     for er in emp_rows:
-        projs = worked.get(er.id)
+        projs = by_emp.get(er.id)
         if not projs:
             continue
         start = row
-        for pid, info in sorted(
-            projs.items(),
-            key=lambda kv: (kv[1]["video"] == "(non identifié)",
-                            (kv[1]["video"] or "").lower()),
-        ):
+        for info in sorted(projs, key=lambda p: (p["video"] or "").lower()):
             est = info["est"]
-            sp = spent.get(pid, 0)
+            sp = spent.get(info["pid"], 0)
             ws.cell(row, 2, info["video"]).alignment = left
             ws.cell(row, 3, info["version"]).alignment = center
             ws.cell(row, 4, info["client"]).alignment = left
