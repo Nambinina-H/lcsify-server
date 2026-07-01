@@ -4,23 +4,27 @@ Par agent : lignes = sa plage horaire perso (debut d'activite -> +9h, en heure
 locale), colonnes = jours ouvres (Lun-Ven) regroupes par semaine sur tout le
 mois. Chaque case = tous les projets captures cette heure-la (listes), couleur =
 version dominante (V1/V2/V3/Autres), rouge si depassement du temps prevu.
+On compte la PRESENCE sur le projet : actif + inactif (idle) ; la pause
+volontaire est exclue (case laissee vide). Un commentaire par bloc-projet
+(survol dans Excel/Sheets) donne Debut / Fin / Total.
 Les statuts manuels (conge, attente, absence...) ne sont pas geres (non captures)
 -> cases laissees vides. Heures en local Madagascar (UTC+3).
 """
-import calendar as _cal
 from datetime import date, datetime, timedelta
 from io import BytesIO
 
 from openpyxl import Workbook
+from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from sqlalchemy import select
 
 from app.common.enums import StateEnum
 from app.database.database_session import SessionLocal
-from app.database.models import Employee, Project, Segment, Space
+from app.database.models import Employee, Project, Segment
 
 _ACTIVE = StateEnum.ACTIVE.value
+_IDLE = StateEnum.IDLE.value
 _LOCAL_OFFSET = timedelta(hours=3)   # Madagascar UTC+3
 _HOURS_SPAN = 10                     # nb de lignes d'heures par agent (debut -> +9)
 _DEFAULT_START = 9                   # plage par defaut si aucune activite
@@ -39,21 +43,21 @@ _MONTHS = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet",
 _NAVY = "0E2638"
 
 
-def _gather(year, month, space_id):
-    last_day = _cal.monthrange(year, month)[1]
-    lo = datetime(year, month, 1) - _LOCAL_OFFSET           # bornes locales -> UTC
-    hi = datetime(year, month, last_day, 23, 59, 59) - _LOCAL_OFFSET
+def _gather(date_from, date_to, external_ids):
+    """date_from/date_to : objets date (bornes locales incluses). external_ids :
+    liste des collaborateurs (external_id) a inclure, ou None/[] = tous."""
+    lo = datetime(date_from.year, date_from.month, date_from.day) - _LOCAL_OFFSET
+    hi = (datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59)
+          - _LOCAL_OFFSET)
     with SessionLocal() as s:
-        space = s.get(Space, space_id) if space_id else None
         emp_q = select(Employee.id, Employee.external_id, Employee.name).where(
             Employee.is_active.is_(True))
-        if space_id is not None:
-            emp_q = emp_q.where(Employee.space_id == space_id)
-        employees = [
-            {"id": r.id, "name": r.name or r.external_id}
-            for r in s.execute(emp_q.order_by(Employee.name)).all()
-        ]
-        segs = s.execute(
+        if external_ids:
+            emp_q = emp_q.where(Employee.external_id.in_(external_ids))
+        emp_rows = s.execute(emp_q.order_by(Employee.name)).all()
+        employees = [{"id": r.id, "name": r.name or r.external_id} for r in emp_rows]
+        emp_ids = [r.id for r in emp_rows]
+        seg_q = (
             select(
                 Segment.employee_id, Segment.project_id,
                 Segment.started_at, Segment.ended_at, Segment.duration_sec,
@@ -61,9 +65,12 @@ def _gather(year, month, space_id):
                 Project.estimated_duration_sec,
             )
             .join(Project, Segment.project_id == Project.id)
-            .where(Segment.state == _ACTIVE,
+            .where(Segment.state.in_((_ACTIVE, _IDLE)),
                    Segment.started_at >= lo, Segment.started_at <= hi)
-        ).all()
+        )
+        if emp_ids:
+            seg_q = seg_q.where(Segment.employee_id.in_(emp_ids))
+        segs = s.execute(seg_q).all()
         # Depassement : temps actif total (toutes periodes) > temps prevu.
         spent = {}
         for r in s.execute(
@@ -73,7 +80,7 @@ def _gather(year, month, space_id):
             spent[r.project_id] = spent.get(r.project_id, 0) + (r.duration_sec or 0)
     est = {r.project_id: (r.estimated_duration_sec or 0) for r in segs}
     overbudget = {pid for pid, e in est.items() if e > 0 and spent.get(pid, 0) > e}
-    return space, employees, segs, overbudget
+    return employees, segs, overbudget
 
 
 def _bucket(segs):
@@ -101,34 +108,76 @@ def _bucket(segs):
     return cells
 
 
-def _week_blocks(year, month):
-    """[(num_semaine, [(date, dans_le_mois) x5 Lun..Ven]), ...] pour le mois."""
-    last = _cal.monthrange(year, month)[1]
+def _fmt_hm(dt):
+    return dt.strftime("%Hh%M")
+
+
+def _fmt_dur(sec):
+    h = int(sec // 3600)
+    m = int((sec % 3600) // 60)
+    return f"{h}h{m:02d}"
+
+
+def _project_spans(segs):
+    """{(emp_id, date_locale, label): {start, end, total}} sur actif + idle.
+
+    Debut = 1er segment du jour, Fin = dernier, Total = somme des durees
+    (la pause volontaire est deja exclue en amont dans _gather)."""
+    spans = {}
+    for r in segs:
+        start = r.started_at + _LOCAL_OFFSET
+        end = (r.ended_at + _LOCAL_OFFSET) if r.ended_at else (
+            start + timedelta(seconds=r.duration_sec or 0))
+        key = (r.employee_id, start.date(), r.video_name)
+        agg = spans.get(key)
+        if agg is None:
+            spans[key] = {"start": start, "end": end,
+                          "total": float(r.duration_sec or 0)}
+        else:
+            agg["total"] += float(r.duration_sec or 0)
+            if start < agg["start"]:
+                agg["start"] = start
+            if end > agg["end"]:
+                agg["end"] = end
+    return spans
+
+
+def _span_comment(label, info):
+    return (f"{label}\n"
+            f"Début : {_fmt_hm(info['start'])}\n"
+            f"Fin : {_fmt_hm(info['end'])}\n"
+            f"Total : {_fmt_dur(info['total'])}")
+
+
+def _week_blocks(date_from, date_to):
+    """[(num_semaine, [(date, dans_la_plage) x5 Lun..Ven]), ...] couvrant la
+    plage [date_from, date_to]. Les jours hors plage sont marques (ombres)."""
     weeks = {}
-    for day in range(1, last + 1):
-        d = date(year, month, day)
+    d = date_from
+    while d <= date_to:
         if d.weekday() < 5:
             iso = d.isocalendar()
             weeks[(iso[0], iso[1])] = True
+        d += timedelta(days=1)
     blocks = []
     for iy, iw in sorted(weeks):
         monday = date.fromisocalendar(iy, iw, 1)
         days = [(monday + timedelta(days=i),
-                 (monday + timedelta(days=i)).month == month
-                 and (monday + timedelta(days=i)).year == year)
+                 date_from <= (monday + timedelta(days=i)) <= date_to)
                 for i in range(5)]
         blocks.append((iw, days))
     return blocks
 
 
-def build_calendar_xlsx(year, month, space_id=None):
-    space, employees, segs, overbudget = _gather(year, month, space_id)
+def build_calendar_xlsx(date_from, date_to, external_ids=None):
+    employees, segs, overbudget = _gather(date_from, date_to, external_ids)
     cells = _bucket(segs)
-    blocks = _week_blocks(year, month)
+    spans = _project_spans(segs)  # pour les commentaires Debut/Fin/Total
+    blocks = _week_blocks(date_from, date_to)
 
     wb = Workbook()
     ws = wb.active
-    ws.title = (_MONTHS[month] or "Export")[:31]
+    ws.title = "Calendrier"
 
     thin = Side(style="thin", color="D0D5DB")
     thick = Side(style="medium", color=_NAVY)  # separateur entre agents
@@ -148,9 +197,10 @@ def build_calendar_xlsx(year, month, space_id=None):
 
     day_cols = [c for k in range(n_weeks) for c in range(_wcol(k), _wcol(k) + 5)]
     last_col = (_wcol(n_weeks - 1) + 4) if n_weeks else 2
-    espace = f" — Espace {space.name}" if space else " — Tous"
+    periode = f"du {date_from.strftime('%d/%m/%Y')} au {date_to.strftime('%d/%m/%Y')}"
+    nb = f" — {len(employees)} collaborateur(s)"
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last_col)
-    t = ws.cell(1, 1, f"Suivi du temps — {_MONTHS[month]} {year}{espace}")
+    t = ws.cell(1, 1, f"Suivi du temps — {periode}{nb}")
     t.font = Font(bold=True, size=13, color=_NAVY)
 
     ROW_WEEK, ROW_DAY = 2, 3
@@ -185,11 +235,12 @@ def build_calendar_xlsx(year, month, space_id=None):
         ac.alignment = center; ac.fill = agent_fill
         ac.font = Font(bold=True, size=10, color=_NAVY)
 
+        commented = set()  # (date, label) deja commentes pour cet agent
         for idx, hour in enumerate(hour_list):
             r = block_start + idx
-            hcell = ws.cell(r, 2, f"{hour:02d}h")
+            hcell = ws.cell(r, 2, hour)  # juste le nombre (centré, sans « h »)
             hcell.alignment = center; hcell.border = border
-            hcell.font = Font(size=9, color="6C7884")
+            hcell.font = Font(size=9, color="6C7884", bold=True)
             for k, (_iw, days) in enumerate(blocks):
                 cstart = _wcol(k)
                 for i, (dd, in_month) in enumerate(days):
@@ -208,6 +259,21 @@ def build_calendar_xlsx(year, month, space_id=None):
                              else _FILL.get((dom["version"] or "").upper(),
                                             _FILL["AUTRES"]))
                     cc.fill = PatternFill("solid", fgColor=color)
+                    # Commentaire Debut/Fin/Total, une seule fois par projet-jour
+                    # (attache a sa 1ere case, en haut de son bloc).
+                    lines = []
+                    for lbl, _ in items:
+                        ck = (dd, lbl)
+                        if ck in commented:
+                            continue
+                        commented.add(ck)
+                        info = spans.get((emp["id"], dd, lbl))
+                        if info:
+                            lines.append(_span_comment(lbl, info))
+                    if lines:
+                        note = Comment("\n\n".join(lines), "Calendrier")
+                        note.width, note.height = 230, 120
+                        cc.comment = note
 
         # Fusion verticale des heures consecutives identiques (par colonne jour).
         for c_idx in day_cols:
@@ -249,9 +315,10 @@ def build_calendar_xlsx(year, month, space_id=None):
     # Legende (verticale) : libelle (col A) + pastille couleur (col B), par ligne.
     leg = row + 1
     ws.merge_cells(start_row=leg, start_column=1, end_row=leg, end_column=2)
-    lt = ws.cell(leg, 1, "Légende")
-    lt.font = Font(bold=True, size=9, color=_NAVY)
+    lt = ws.cell(leg, 1, "")  # case conservée, sans le texte « Légende »
     lt.alignment = center
+    lt.border = border
+    ws.cell(leg, 2).border = border
     for i, (lab, key) in enumerate(
         [("V1", "V1"), ("V2", "V2"), ("V3", "V3"),
          ("Autres", "AUTRES"), ("Dépassement timer", "OVER")]

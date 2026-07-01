@@ -91,3 +91,10 @@
 
 **Updated**
 - Congés : champ **`validateur`** (désigné à la création, saisi au formulaire) ajouté sur `leaves` — migration `e1f2a3b4c5d6` (additive). Affiché dans le tableau ; distinct de `decided_by` (qui valide réellement le congé, tracé via l'audit `leave.status`)
+
+## 2026-07-01
+**Updated**
+- Export Excel du calendrier : l'endpoint passe de `year&month&space_id` à **`GET /api/calendar/export?date_from&date_to&employee_ids`** (manager) — export sur une **plage de dates libre** et pour une **liste de collaborateurs** choisis (external_id séparés par des virgules ; vide = tous). Dates invalides ou fin < début → **422**
+- Export calendrier : on compte désormais la **présence** sur le projet = **actif + inactif (idle)** ; la **pause volontaire** reste exclue (case vide). Le dépassement (rouge) reste basé sur l'actif
+- Export calendrier — **commentaire par bloc-projet** (au survol dans Excel/Google Sheets) : **Début / Fin / Total** (1er début, dernière fin, temps total de présence), une fois par projet-jour
+- Export calendrier — mise en forme : colonne **Heure** en **nombre seul, centré et gras** (sans « h ») ; **titre « Légende » retiré** (case conservée)

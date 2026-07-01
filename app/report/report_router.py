@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.report import export_service, report_service
@@ -82,14 +84,24 @@ def calendar(
 
 @router.get("/api/calendar/export")
 def calendar_export(
-    year: int,
-    month: int,
+    date_from: str,
+    date_to: str,
     _=Depends(get_current_user),
-    space_id: int | None = None,
+    employee_ids: str = "",
 ):
-    """Export Excel (.xlsx) du calendrier : grille hebdo du mois, par espace."""
-    data = export_service.build_calendar_xlsx(year, month, space_id)
-    fname = f"calendrier-{year}-{month:02d}.xlsx"
+    """Export Excel (.xlsx) du calendrier : grille hebdo sur la plage
+    [date_from, date_to], pour les collaborateurs sélectionnés (external_id
+    séparés par des virgules ; vide = tous)."""
+    try:
+        df = date.fromisoformat(date_from)
+        dt = date.fromisoformat(date_to)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Dates invalides (format AAAA-MM-JJ)")
+    if dt < df:
+        raise HTTPException(status_code=422, detail="La date de fin précède la date de début")
+    ids = [x.strip() for x in employee_ids.split(",") if x.strip()] or None
+    data = export_service.build_calendar_xlsx(df, dt, ids)
+    fname = f"calendrier-{date_from}_{date_to}.xlsx"
     return Response(
         content=data,
         media_type=_XLSX_MIME,
